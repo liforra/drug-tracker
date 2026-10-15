@@ -20,6 +20,18 @@ android {
         }
     }
 
+    // CI points this at the keystore from the repo secret, so release APKs carry the same
+    // signature as the ones built on the phone owner's machine and install as updates.
+    // Unset, Gradle keeps using its own ~/.android/debug.keystore.
+    System.getenv("SNUS_DEBUG_KEYSTORE")?.let { path ->
+        signingConfigs.getByName("debug") {
+            storeFile = file(path)
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
