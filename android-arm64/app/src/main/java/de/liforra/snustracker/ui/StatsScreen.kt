@@ -5,7 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -60,14 +60,14 @@ fun StatsScreen(snapshot: Snapshot, curves: Curves?, onBack: () -> Unit) {
                     "Toleranz",
                     snapshot.toleranceIndex?.let { "%.0f".format(it) } ?: "—",
                     snapshot.toleranceIndex?.let { "% vom Hoch" } ?: "zu wenig Verlauf",
-                    Sky,
+                    Cotinine,
                 )
                 Tile(
                     Modifier.weight(1f),
                     "Heute",
                     snapshot.todayCount.toString(),
                     "%.1f mg".format(snapshot.todayMg),
-                    Amber,
+                    Accent,
                 )
             }
 
@@ -78,14 +78,14 @@ fun StatsScreen(snapshot: Snapshot, curves: Curves?, onBack: () -> Unit) {
                     "Nikotin",
                     "%.1f".format(snapshot.nicotineNgMl),
                     "%+.2f/min".format(snapshot.nicotineRatePerMin),
-                    Amber,
+                    Accent,
                 )
                 Tile(
                     Modifier.weight(1f),
                     "Cotinin",
                     "%.0f".format(snapshot.cotinineNgMl),
                     "ng/mL",
-                    Sky,
+                    Cotinine,
                 )
             }
 
@@ -142,9 +142,9 @@ private fun DualAxisChart(curves: Curves, modifier: Modifier) {
 
     Canvas(
         modifier
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RectangleShape)
             .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outline, RectangleShape)
             .padding(12.dp)
     ) {
         val count = curves.times.size
@@ -169,17 +169,17 @@ private fun DualAxisChart(curves: Curves, modifier: Modifier) {
             lineTo(size.width, size.height)
             close()
         }
-        drawPath(area, Amber.copy(alpha = 0.18f))
+        drawPath(area, Accent.copy(alpha = 0.18f))
 
         val nicotinePath = Path().apply {
             nicotine.forEachIndexed { i, p -> if (i == 0) moveTo(p.x, p.y) else lineTo(p.x, p.y) }
         }
-        drawPath(nicotinePath, Amber, style = Stroke(width = 2.5f))
+        drawPath(nicotinePath, Accent, style = Stroke(width = 2.5f))
 
         val cotininePath = Path().apply {
             cotinine.forEachIndexed { i, p -> if (i == 0) moveTo(p.x, p.y) else lineTo(p.x, p.y) }
         }
-        drawPath(cotininePath, Sky, style = Stroke(width = 2f))
+        drawPath(cotininePath, Cotinine, style = Stroke(width = 2f))
 
         // Baseline, so an empty stretch is visibly zero rather than merely empty.
         drawLine(
@@ -195,9 +195,9 @@ private fun DualAxisChart(curves: Curves, modifier: Modifier) {
 private fun Tile(modifier: Modifier, label: String, value: String, unit: String, accent: Color) {
     Column(
         modifier
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RectangleShape)
             .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outline, RectangleShape)
             .padding(vertical = 14.dp, horizontal = 12.dp)
     ) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = TextMuted)

@@ -1,72 +1,105 @@
 package de.liforra.snustracker.ui
 
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import de.liforra.snustracker.R
 
 /**
- * One palette shared with the desktop client, so the two do not read as different
- * products. Amber means "active"; everything else stays out of the way.
+ * The liforra.de palette used by the desktop bar, shared with the Linux client
+ * (`linux-x86/src/theme.rs`) so they read as one product. Change the tokens in both
+ * places or not at all.
+ *
+ * Dark only, like the bar: this is something you tap in a pocket, often at night.
  */
-val Amber = Color(0xFFF2994A)
-val AmberDim = Color(0xFF6E4A28)
-val Sky = Color(0xFF56A8D8)
-val Ink = Color(0xFF14161A)
-val SurfaceDark = Color(0xFF1C1F25)
-val SurfaceEdge = Color(0xFF2A2E36)
-val TextPrimary = Color(0xFFE6E8EC)
-val TextMuted = Color(0xFF8C93A0)
-val Good = Color(0xFF5CB85C)
+val Bg = Color(0xFF030205)
+val Panel = Color(0xFF09050F)
+val DividerColor = Color(0xFF2B2239)
+val Frame = Color(0xFF9D5BF4)
+val Accent = Color(0xFFAC77FA)
+val AccentStrong = Color(0xFFC295FF)
+val AccentWash = Color(0xFF211632)
+val Hover = Color(0xFF120B1C)
+val TextPrimary = Color(0xFFECE9F4)
+val TextBody = Color(0xFFBFBCC6)
+val TextMuted = Color(0xFF918D9A)
+val Good = Color(0xFF7EE2A8)
+val Warn = Color(0xFFFFCF6B)
+val Bad = Color(0xFFFF6B8B)
 
-private val DarkColors = darkColorScheme(
-    primary = Amber,
-    onPrimary = Ink,
-    secondary = Sky,
-    background = Ink,
-    onBackground = TextPrimary,
-    surface = SurfaceDark,
-    onSurface = TextPrimary,
-    surfaceVariant = SurfaceEdge,
-    onSurfaceVariant = TextMuted,
-    outline = SurfaceEdge,
+/** Nicotine takes the accent, cotinine the warm contrast, so the curves stay apart. */
+val Nicotine = Accent
+val Cotinine = Warn
+
+private val SpaceMono = FontFamily(
+    Font(R.font.space_mono_regular, FontWeight.Normal),
+    Font(R.font.space_mono_bold, FontWeight.Bold),
 )
 
-/**
- * Light mode exists so the app does not look broken for anyone who forces it, but the
- * design is dark-first: this is something you tap in a pocket, often at night.
- */
-private val LightColors = lightColorScheme(
-    primary = Color(0xFFB4632A),
-    onPrimary = Color.White,
-    secondary = Color(0xFF2E6C90),
-    background = Color(0xFFF7F7F8),
-    onBackground = Color(0xFF1A1C20),
-    surface = Color.White,
-    onSurface = Color(0xFF1A1C20),
-    surfaceVariant = Color(0xFFE8E9EC),
-    onSurfaceVariant = Color(0xFF5A6069),
+private val DarkColors = darkColorScheme(
+    primary = Accent,
+    onPrimary = Bg,
+    primaryContainer = AccentWash,
+    onPrimaryContainer = AccentStrong,
+    secondary = Warn,
+    background = Bg,
+    onBackground = TextPrimary,
+    surface = Panel,
+    onSurface = TextPrimary,
+    surfaceVariant = Hover,
+    onSurfaceVariant = TextMuted,
+    surfaceContainer = Panel,
+    surfaceContainerHigh = Panel,
+    surfaceContainerHighest = Hover,
+    outline = DividerColor,
+    outlineVariant = DividerColor,
+    error = Bad,
+)
+
+private fun style(size: Int, bold: Boolean = false) = TextStyle(
+    fontFamily = SpaceMono,
+    fontSize = size.sp,
+    fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
 )
 
 private val AppTypography = Typography(
-    displaySmall = TextStyle(fontSize = 44.sp, fontWeight = FontWeight.SemiBold),
-    headlineSmall = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.SemiBold),
-    titleMedium = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.SemiBold),
-    bodyMedium = TextStyle(fontSize = 14.sp),
-    labelSmall = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Medium),
+    displaySmall = style(40, bold = true),
+    headlineSmall = style(20, bold = true),
+    titleLarge = style(20, bold = true),
+    titleMedium = style(15, bold = true),
+    titleSmall = style(13, bold = true),
+    bodyLarge = style(15),
+    bodyMedium = style(13),
+    bodySmall = style(12),
+    labelLarge = style(13, bold = true),
+    labelMedium = style(12),
+    labelSmall = style(11),
+)
+
+/** Square, as in the bar: no corner is rounded anywhere. */
+private val SquareShapes = Shapes(
+    extraSmall = RoundedCornerShape(0),
+    small = RoundedCornerShape(0),
+    medium = RoundedCornerShape(0),
+    large = RoundedCornerShape(0),
+    extraLarge = RoundedCornerShape(0),
 )
 
 @Composable
 fun SnusTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) DarkColors else LightColors,
+        colorScheme = DarkColors,
         typography = AppTypography,
+        shapes = SquareShapes,
         content = content,
     )
 }

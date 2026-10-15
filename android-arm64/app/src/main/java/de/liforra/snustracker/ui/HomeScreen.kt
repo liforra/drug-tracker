@@ -30,7 +30,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
@@ -41,7 +41,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.font.FontWeight
@@ -149,6 +148,11 @@ fun HomeScreen(
                 }
             }
 
+            if (snapshot.locked) {
+                LockedBanner()
+                Spacer(Modifier.height(16.dp))
+            }
+
             StatsRow(snapshot)
             Spacer(Modifier.height(20.dp))
 
@@ -174,7 +178,7 @@ fun HomeScreen(
                             // One at a time: a second pouch while one is in is almost
                             // always a mis-tap, and correcting a stray record is more
                             // friction than the tap ever saved.
-                            enabled = snapshot.openSession == null && !busy,
+                            enabled = snapshot.openSession == null && !busy && !snapshot.locked,
                             onClick = { onStart(product) },
                             onLongClick = { tuning = product },
                         )
@@ -326,7 +330,7 @@ private fun InviteDialog(invite: Invite, onDismiss: () -> Unit) {
                         bitmap = it.asImageBitmap(),
                         contentDescription = "QR-Code zur Geräteanmeldung",
                         filterQuality = FilterQuality.None,
-                        modifier = Modifier.size(240.dp).clip(RoundedCornerShape(8.dp)),
+                        modifier = Modifier.size(240.dp).clip(RectangleShape),
                     )
                 }
                 Spacer(Modifier.height(12.dp))
@@ -412,7 +416,7 @@ private fun NumberSheet(
                 onClick = { value?.let(onConfirm) },
                 enabled = value != null && value > 0,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = RoundedCornerShape(14.dp),
+                shape = RectangleShape,
             ) {
                 Text("Speichern")
             }
@@ -461,17 +465,15 @@ private fun ActiveSessionCard(
     )
 
     Surface(
-        shape = RoundedCornerShape(18.dp),
+        shape = RectangleShape,
         color = Color.Transparent,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
             Modifier
-                .clip(RoundedCornerShape(18.dp))
-                .background(
-                    Brush.linearGradient(listOf(Color(0xFF2A2018), Color(0xFF211C18)))
-                )
-                .border(1.dp, AmberDim, RoundedCornerShape(18.dp))
+                .clip(RectangleShape)
+                .background(AccentWash)
+                .border(1.dp, Accent, RectangleShape)
                 .padding(20.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -479,7 +481,7 @@ private fun ActiveSessionCard(
                     Modifier
                         .size(10.dp)
                         .clip(CircleShape)
-                        .background(Amber.copy(alpha = pulse))
+                        .background(Accent.copy(alpha = pulse))
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
@@ -495,7 +497,7 @@ private fun ActiveSessionCard(
             Text(
                 formatElapsed(elapsed),
                 style = MaterialTheme.typography.displaySmall,
-                color = Amber,
+                color = Accent,
             )
             Text(
                 if (session.paused) "ruht — gibt gerade nichts ab" else "seit dem Einlegen",
@@ -511,7 +513,7 @@ private fun ActiveSessionCard(
                     if (left <= 0) "leer — gibt nichts mehr ab"
                     else "noch ${left / 60} min Freisetzung",
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (left <= 0) TextMuted else Amber.copy(alpha = 0.8f),
+                    color = if (left <= 0) TextMuted else Accent.copy(alpha = 0.8f),
                 )
             }
 
@@ -521,22 +523,22 @@ private fun ActiveSessionCard(
                     onClick = onPauseToggle,
                     enabled = !busy,
                     modifier = Modifier.weight(1f).height(52.dp),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RectangleShape,
                 ) {
                     Text(
                         if (session.paused) "Wieder rein" else "Ruhen",
                         style = MaterialTheme.typography.titleMedium,
-                        color = Amber,
+                        color = Accent,
                     )
                 }
                 Button(
                     onClick = onEnd,
                     enabled = !busy,
                     modifier = Modifier.weight(1f).height(52.dp),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RectangleShape,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Amber,
-                        contentColor = Ink,
+                        containerColor = Accent,
+                        contentColor = Bg,
                     ),
                 ) {
                     Text("Beenden", style = MaterialTheme.typography.titleMedium)
@@ -567,9 +569,9 @@ private fun StatsRow(snapshot: Snapshot) {
             // The slope, not the unit: what a pouch feels like tracks the rate of
             // change, because nicotinic receptors desensitise under a steady level.
             "%+.2f/min".format(snapshot.nicotineRatePerMin),
-            Amber,
+            Accent,
         )
-        StatTile(Modifier.weight(1f), "Cotinin", "%.0f".format(snapshot.cotinineNgMl), "ng/mL", Sky)
+        StatTile(Modifier.weight(1f), "Cotinin", "%.0f".format(snapshot.cotinineNgMl), "ng/mL", Cotinine)
         StatTile(
             Modifier.weight(1f),
             "Heute",
@@ -590,9 +592,9 @@ private fun StatTile(
 ) {
     Column(
         modifier
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RectangleShape)
             .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outline, RectangleShape)
             .padding(vertical = 14.dp, horizontal = 12.dp)
     ) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = TextMuted)
@@ -610,16 +612,16 @@ private fun ProductTile(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
-    val accent = product.accent?.let { parseHex(it) } ?: Amber
+    val accent = product.accent?.let { parseHex(it) } ?: Accent
     val alpha = if (enabled) 1f else 0.4f
 
     Column(
         Modifier
             .fillMaxWidth()
             .height(112.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RectangleShape)
             .background(MaterialTheme.colorScheme.surface.copy(alpha = alpha))
-            .border(1.dp, accent.copy(alpha = 0.35f * alpha), RoundedCornerShape(16.dp))
+            .border(1.dp, accent.copy(alpha = 0.35f * alpha), RectangleShape)
             // Long-press tunes how long this variety releases. Hidden on purpose: it
             // is a calibration knob, not something to reach for every day.
             .combinedClickable(
@@ -633,7 +635,7 @@ private fun ProductTile(
         Box(
             Modifier
                 .size(width = 28.dp, height = 4.dp)
-                .clip(RoundedCornerShape(2.dp))
+                .clip(RectangleShape)
                 .background(accent.copy(alpha = alpha))
         )
         Column {
@@ -653,12 +655,37 @@ private fun ProductTile(
     }
 }
 
+/**
+ * No valid lease and no server: the records cannot be read, so there is nothing honest
+ * to show. Without this the screen looked merely empty, which reads as "no data" rather
+ * than "locked out" -- and the Linux client already says so.
+ */
+@Composable
+private fun LockedBanner() {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, Bad, RectangleShape)
+            .padding(16.dp)
+    ) {
+        Text("Gesperrt", style = MaterialTheme.typography.titleMedium, color = Bad)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Kein gültiges Lease und der Server ist nicht erreichbar. Sobald die " +
+                "Verbindung steht, entsperrt sich die App von selbst.",
+            style = MaterialTheme.typography.bodySmall,
+            color = TextBody,
+        )
+    }
+}
+
 @Composable
 private fun EmptyProducts() {
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RectangleShape)
             .background(MaterialTheme.colorScheme.surface)
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -737,7 +764,7 @@ private fun AddProductSheet(onDismiss: () -> Unit, onConfirm: (String, Double) -
                 onClick = { onConfirm(name.trim(), parsedMg ?: 0.0) },
                 enabled = valid,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = RoundedCornerShape(14.dp),
+                shape = RectangleShape,
             ) {
                 Text("Anlegen")
             }

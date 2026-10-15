@@ -28,6 +28,8 @@ android {
 
     // The Rust library is built by `cargo ndk` into this tree; see README.md.
     sourceSets["main"].jniLibs.srcDirs("src/main/jniLibs")
+    // Space Mono is shared with the Linux client, which embeds the same files.
+    sourceSets["main"].res.srcDirs("src/main/res", "../../assets/res")
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

@@ -2,8 +2,8 @@
 <resources>
     <!-- Compose paints everything; this only stops the window flashing white on launch. -->
     <style name="Theme.SnusTracker" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">#14161A</item>
-        <item name="android:statusBarColor">#14161A</item>
-        <item name="android:navigationBarColor">#14161A</item>
+        <item name="android:windowBackground">#030205</item>
+        <item name="android:statusBarColor">#030205</item>
+        <item name="android:navigationBarColor">#030205</item>
     </style>
 </resources>

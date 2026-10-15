@@ -2,7 +2,7 @@ package de.liforra.snustracker.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -104,7 +104,7 @@ fun SetupScreen(
                 },
                 enabled = !busy,
                 modifier = Modifier.fillMaxWidth().height(54.dp),
-                shape = RoundedCornerShape(14.dp),
+                shape = RectangleShape,
             ) {
                 Text("QR-Code scannen")
             }
@@ -173,7 +173,7 @@ fun SetupScreen(
                 onClick = { onEnroll(serverUrl.trim(), serverPub.trim(), code.trim(), name.trim()) },
                 enabled = ready,
                 modifier = Modifier.fillMaxWidth().height(54.dp),
-                shape = RoundedCornerShape(14.dp),
+                shape = RectangleShape,
             ) {
                 if (busy) {
                     CircularProgressIndicator(

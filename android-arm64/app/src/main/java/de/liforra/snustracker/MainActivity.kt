@@ -209,9 +209,14 @@ private fun App(repository: TrackerRepository) {
             onApproveDevices = {
                 scope.launch {
                     busy = true
-                    apply(repository.approveDevices())
+                    val result = repository.approveDevices()
+                    apply(result)
                     busy = false
-                    message = "Freischaltung versucht — neue Geräte können jetzt lesen."
+                    // Only claim success on success: this used to overwrite the error
+                    // apply() had just shown with a cheerful message.
+                    if (result is NativeResult.Ok) {
+                        message = "Neue Geräte freigeschaltet — sie können jetzt lesen."
+                    }
                 }
             },
             invite = invite,
