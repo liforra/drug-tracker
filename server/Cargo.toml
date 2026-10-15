@@ -1,0 +1,39 @@
+[package]
+name = "tracker-server"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "tracker_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "tracker-server"
+path = "src/main.rs"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
+tower-http = { version = "0.6", features = ["trace", "limit"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+rand = "0.9"
+base64 = "0.22"
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+chacha20poly1305 = "0.10"
+hkdf = "0.12"
+sha2 = "0.10"
+zeroize = "1"
+tracker-core = { path = "../core" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+chrono = { workspace = true }

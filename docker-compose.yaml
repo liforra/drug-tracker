@@ -1,0 +1,28 @@
+services:
+  snus-tracker:
+    build: .
+    image: snus-tracker:latest
+    container_name: snus-tracker
+    restart: unless-stopped
+    # Matches the owner of ./data on the host. Without this the container writes as
+    # root and the bind mount ends up with files the host user cannot read.
+    user: "1000:1000"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+    ports:
+      - "8747:8747"
+    environment:
+      - TZ=Europe/Berlin
+      - TRACKER_DB=/data/tracker-server.db
+      - TRACKER_BIND=0.0.0.0:8747
+      # Unmounts the plain routes entirely, so every request must arrive through the
+      # encrypted tunnel. Caddy's TLS is then a second layer, not the only one.
+      - TRACKER_REQUIRE_TUNNEL=1
+      # Off by default: this log is the data. Set to a day count only if you want the
+      # server to forget on its own.
+      # - TRACKER_RETAIN_EVENT_DAYS=
+      # - TRACKER_RETAIN_AUDIT_DAYS=
+    volumes:
+      - ./data:/data

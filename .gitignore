@@ -1,0 +1,13 @@
+/target
+/data
+*.db
+*.db-shm
+*.db-wal
+
+# Android / Gradle
+android-arm64/.gradle/
+android-arm64/.kotlin/
+android-arm64/build/
+android-arm64/app/build/
+android-arm64/local.properties
+android-arm64/app/src/main/jniLibs/

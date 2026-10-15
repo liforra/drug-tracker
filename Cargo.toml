@@ -1,0 +1,22 @@
+[workspace]
+resolver = "3"
+members = ["core", "server", "linux-x86", "android-arm64/rust"]
+
+[workspace.package]
+edition = "2024"
+license = "AGPL-3.0-or-later"
+
+[workspace.dependencies]
+chrono = { version = "0.4", default-features = false, features = ["std", "serde", "clock"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+thiserror = "2"
+
+# Argon2 is deliberately expensive. Unoptimised it is expensive enough to make a debug
+# test run take tens of seconds, so build just this dependency with optimisation even in
+# debug profiles.
+[profile.dev.package.argon2]
+opt-level = 3
+[profile.dev.package.blake2]
+opt-level = 3

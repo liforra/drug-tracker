@@ -1,0 +1,9 @@
+target
+.git
+data
+android-arm64/app
+android-arm64/gradle
+android-arm64/gradlew
+android-arm64/*.gradle.kts
+android-arm64/local.properties
+android-arm64/gradle.properties

@@ -1,0 +1,26 @@
+[package]
+name = "tracker-core"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+chrono.workspace = true
+argon2 = "0.5"
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+chacha20poly1305 = "0.10"
+hkdf = "0.12"
+sha2 = "0.10"
+rand = "0.9"
+base64 = "0.22"
+zeroize = { version = "1", features = ["derive"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+ureq = { version = "3", features = ["json"] }
+serde_json.workspace = true
+serde.workspace = true
+uuid = { version = "1", features = ["v4", "v7", "serde"] }
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

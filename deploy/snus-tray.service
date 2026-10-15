@@ -1,0 +1,21 @@
+# User unit for the laptop tray: ~/.config/systemd/user/snus-tray.service
+#
+#   systemctl --user enable --now snus-tray
+#
+# Graphical target rather than default.target, because the tray needs a session bus and
+# a StatusNotifierHost to register against -- starting it before the compositor is up
+# just produces an invisible item.
+
+[Unit]
+Description=Snus tracker tray
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=exec
+ExecStart=%h/.local/bin/snus
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=graphical-session.target

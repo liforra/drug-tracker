@@ -1,0 +1,3 @@
+tracker.liforra.de {
+    reverse_proxy :8747
+}
