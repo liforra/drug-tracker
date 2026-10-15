@@ -11,6 +11,7 @@ mod notify;
 mod qr;
 mod session;
 mod stats;
+mod theme;
 mod tray;
 mod worker;
 

@@ -236,8 +236,8 @@ fn draw_icon(size: i32, active: bool) -> Icon {
     let outer = centre - 1.0;
     let inner = outer * 0.55;
 
-    // Warm amber when a pouch is in, muted grey when idle.
-    let (r, g, b) = if active { (0xF2, 0x99, 0x4A) } else { (0xA0, 0xA4, 0xAC) };
+    // Accent purple when a pouch is in, dim grey when idle -- the bar's palette.
+    let (r, g, b) = if active { (0xAC, 0x77, 0xFA) } else { (0x91, 0x8D, 0x9A) };
 
     for y in 0..dimension {
         for x in 0..dimension {
