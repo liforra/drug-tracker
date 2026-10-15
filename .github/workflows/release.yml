@@ -81,6 +81,19 @@ jobs:
         run: ./android-arm64/build-native.sh
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
+      # Same debug key as on the phone, so release APKs install as updates over the
+      # locally built one. Without the secret, Gradle generates a fresh key and the
+      # APK will not upgrade an existing install.
+      - name: Install signing key
+        env:
+          DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$DEBUG_KEYSTORE_B64" ]; then
+            mkdir -p ~/.android
+            echo "$DEBUG_KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
+          else
+            echo "::warning::ANDROID_DEBUG_KEYSTORE_B64 not set; APK will be signed with a throwaway key"
+          fi
       - name: Build APK
         working-directory: android-arm64
         run: ./gradlew --no-daemon assembleDebug
