@@ -1,0 +1,90 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  # Creates the release for this commit. The build jobs only depend on this, never on
+  # each other, so each one uploads its artifact the moment it is done.
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - id: meta
+        run: echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - name: Create release
+        run: |
+          gh release view "${{ steps.meta.outputs.tag }}" --repo "$GITHUB_REPOSITORY" \
+            || gh release create "${{ steps.meta.outputs.tag }}" --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" --title "${{ steps.meta.outputs.tag }}" \
+              --notes "Automated build of commit $GITHUB_SHA"
+
+  server:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: server
+      - run: cargo build --release -p tracker-server
+      - name: Upload
+        run: |
+          cp target/release/tracker-server tracker-server-linux-x86_64
+          gh release upload "${{ needs.release.outputs.tag }}" tracker-server-linux-x86_64 --clobber
+
+  linux-client:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: linux-client
+      - run: cargo build --release -p snus-tray
+      - name: Upload
+        run: |
+          cp target/release/snus snus-linux-x86_64
+          gh release upload "${{ needs.release.outputs.tag }}" snus-linux-x86_64 --clobber
+
+  android:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: android
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - name: Install SDK components
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018"
+      - name: Build native library
+        run: ./android-arm64/build-native.sh
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
+      - name: Build APK
+        working-directory: android-arm64
+        run: ./gradlew --no-daemon assembleDebug
+      - name: Upload
+        run: |
+          cp android-arm64/app/build/outputs/apk/debug/app-debug.apk snus-tracker-android-arm64.apk
+          gh release upload "${{ needs.release.outputs.tag }}" snus-tracker-android-arm64.apk --clobber
