@@ -42,7 +42,9 @@ impl Config {
         let raw = BASE64_STANDARD
             .decode(&self.server_pub)
             .map_err(|e| ConfigError::Decode(e.to_string()))?;
-        raw.as_slice().try_into().map_err(|_| ConfigError::Decode("expected 32 bytes".into()))
+        raw.as_slice()
+            .try_into()
+            .map_err(|_| ConfigError::Decode("expected 32 bytes".into()))
     }
 }
 
@@ -103,16 +105,20 @@ pub fn load_identity(paths: &Paths) -> Result<Identity> {
     if paths.identity_file.exists() {
         let raw = fs::read(&paths.identity_file)?;
         if raw.len() != IDENTITY_LEN {
-            return Err(ConfigError::Decode("identity file is the wrong size".into()));
+            return Err(ConfigError::Decode(
+                "identity file is the wrong size".into(),
+            ));
         }
         let x: [u8; 32] = raw[0..32].try_into().unwrap();
         let e: [u8; 32] = raw[32..64].try_into().unwrap();
         let secret: [u8; 32] = raw[64..96].try_into().unwrap();
-        return Ok(Identity { device: DeviceIdentity::from_bytes(x, e), device_secret: secret });
+        return Ok(Identity {
+            device: DeviceIdentity::from_bytes(x, e),
+            device_secret: secret,
+        });
     }
 
-    let device = DeviceIdentity::generate()
-        .map_err(|e| ConfigError::Decode(e.to_string()))?;
+    let device = DeviceIdentity::generate().map_err(|e| ConfigError::Decode(e.to_string()))?;
     let mut device_secret = [0u8; 32];
     use rand::TryRngCore;
     rand::rngs::OsRng
@@ -125,7 +131,10 @@ pub fn load_identity(paths: &Paths) -> Result<Identity> {
     blob.extend_from_slice(&device_secret);
     write_private(&paths.identity_file, &blob)?;
 
-    Ok(Identity { device, device_secret })
+    Ok(Identity {
+        device,
+        device_secret,
+    })
 }
 
 /// The server's half of the storage key, cached with the expiry the server set.

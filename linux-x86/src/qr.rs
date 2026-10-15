@@ -24,7 +24,11 @@ impl Qr {
     pub fn encode(data: &str) -> Result<Self, qrcode::types::QrError> {
         let code = QrCode::new(data.as_bytes())?;
         let width = code.width();
-        let modules = code.to_colors().into_iter().map(|c| c == Color::Dark).collect();
+        let modules = code
+            .to_colors()
+            .into_iter()
+            .map(|c| c == Color::Dark)
+            .collect();
         Ok(Self { width, modules })
     }
 

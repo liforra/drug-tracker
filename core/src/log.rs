@@ -253,7 +253,11 @@ impl State {
 /// sequence from the same set, with the id breaking ties that a clock cannot.
 pub fn project(entries: &[LogEntry]) -> State {
     let mut ordered: Vec<&LogEntry> = entries.iter().collect();
-    ordered.sort_by(|a, b| a.recorded_at.cmp(&b.recorded_at).then_with(|| a.id.cmp(&b.id)));
+    ordered.sort_by(|a, b| {
+        a.recorded_at
+            .cmp(&b.recorded_at)
+            .then_with(|| a.id.cmp(&b.id))
+    });
 
     let mut state = State::default();
     let mut discarded: Vec<&str> = Vec::new();
@@ -270,17 +274,20 @@ pub fn project(entries: &[LogEntry]) -> State {
                 accent,
                 image,
             } => {
-                state.products.entry(product_id.clone()).or_insert_with(|| Product {
-                    id: product_id.clone(),
-                    name: name.clone(),
-                    substance_id: substance_id.clone(),
-                    route_id: route_id.clone(),
-                    nominal_mg: *nominal_mg,
-                    default_duration_secs: *default_duration_secs,
-                    accent: accent.clone(),
-                    image: image.clone(),
-                    retired: false,
-                });
+                state
+                    .products
+                    .entry(product_id.clone())
+                    .or_insert_with(|| Product {
+                        id: product_id.clone(),
+                        name: name.clone(),
+                        substance_id: substance_id.clone(),
+                        route_id: route_id.clone(),
+                        nominal_mg: *nominal_mg,
+                        default_duration_secs: *default_duration_secs,
+                        accent: accent.clone(),
+                        image: image.clone(),
+                        retired: false,
+                    });
             }
 
             Event::ProductUpdated {
@@ -320,17 +327,27 @@ pub fn project(entries: &[LogEntry]) -> State {
                 }
             }
 
-            Event::SessionStarted { session_id, product_id, started_at } => {
-                state.sessions.entry(session_id.clone()).or_insert_with(|| Session {
-                    id: session_id.clone(),
-                    product_id: product_id.clone(),
-                    started_at: *started_at,
-                    ended_at: None,
-                    pauses: Vec::new(),
-                });
+            Event::SessionStarted {
+                session_id,
+                product_id,
+                started_at,
+            } => {
+                state
+                    .sessions
+                    .entry(session_id.clone())
+                    .or_insert_with(|| Session {
+                        id: session_id.clone(),
+                        product_id: product_id.clone(),
+                        started_at: *started_at,
+                        ended_at: None,
+                        pauses: Vec::new(),
+                    });
             }
 
-            Event::SessionEnded { session_id, ended_at } => {
+            Event::SessionEnded {
+                session_id,
+                ended_at,
+            } => {
                 if let Some(session) = state.sessions.get_mut(session_id) {
                     // Earliest end wins. Two devices both marking a pouch done is a
                     // normal race, and the first observation is the accurate one.
@@ -341,7 +358,10 @@ pub fn project(entries: &[LogEntry]) -> State {
                 }
             }
 
-            Event::SessionPaused { session_id, paused_at } => {
+            Event::SessionPaused {
+                session_id,
+                paused_at,
+            } => {
                 if let Some(session) = state.sessions.get_mut(session_id) {
                     // Two devices pausing the same pouch is a normal race, and the
                     // pause is idempotent: while one is already open, a second one
@@ -363,7 +383,10 @@ pub fn project(entries: &[LogEntry]) -> State {
                 }
             }
 
-            Event::SessionResumed { session_id, resumed_at } => {
+            Event::SessionResumed {
+                session_id,
+                resumed_at,
+            } => {
                 if let Some(session) = state.sessions.get_mut(session_id) {
                     match session.pauses.last_mut() {
                         // Closing the open rest. Earliest resume wins for the mirror
@@ -386,7 +409,10 @@ pub fn project(entries: &[LogEntry]) -> State {
                 discarded.push(session_id);
             }
 
-            Event::SubjectUpdated { body_mass_kg, metabolism_factor } => {
+            Event::SubjectUpdated {
+                body_mass_kg,
+                metabolism_factor,
+            } => {
                 if body_mass_kg.is_some() {
                     state.body_mass_kg = *body_mass_kg;
                 }
@@ -434,7 +460,12 @@ mod tests {
     }
 
     fn entry(id: &str, recorded: i64, device: &str, event: Event) -> LogEntry {
-        LogEntry { id: id.into(), recorded_at: at(recorded), device_id: device.into(), event }
+        LogEntry {
+            id: id.into(),
+            recorded_at: at(recorded),
+            device_id: device.into(),
+            event,
+        }
     }
 
     fn cuba() -> Event {
@@ -478,7 +509,10 @@ mod tests {
                 "e3",
                 40,
                 "laptop",
-                Event::SessionEnded { session_id: "s1".into(), ended_at: at(1810) },
+                Event::SessionEnded {
+                    session_id: "s1".into(),
+                    ended_at: at(1810),
+                },
             ),
         ]);
 
@@ -506,7 +540,10 @@ mod tests {
         let open = state.open_sessions();
         assert_eq!(open.len(), 1);
         assert_eq!(open[0].elapsed(at(910)).num_minutes(), 15);
-        assert_eq!(state.product(&open[0].product_id).unwrap().name, "CUBA PEACH");
+        assert_eq!(
+            state.product(&open[0].product_id).unwrap().name,
+            "CUBA PEACH"
+        );
     }
 
     #[test]
@@ -527,7 +564,10 @@ mod tests {
                 "e3",
                 40,
                 "laptop",
-                Event::SessionEnded { session_id: "s1".into(), ended_at: at(1810) },
+                Event::SessionEnded {
+                    session_id: "s1".into(),
+                    ended_at: at(1810),
+                },
             ),
             entry(
                 "e4",
@@ -551,8 +591,16 @@ mod tests {
         shuffled.swap(0, 2);
         shuffled.swap(1, 3);
 
-        assert_eq!(forward, project(&backward), "reversed arrival must fold identically");
-        assert_eq!(forward, project(&shuffled), "so must any other arrival order");
+        assert_eq!(
+            forward,
+            project(&backward),
+            "reversed arrival must fold identically"
+        );
+        assert_eq!(
+            forward,
+            project(&shuffled),
+            "so must any other arrival order"
+        );
     }
 
     #[test]
@@ -576,13 +624,19 @@ mod tests {
             "e3",
             100,
             "phone",
-            Event::SessionEnded { session_id: "s1".into(), ended_at: at(1800) },
+            Event::SessionEnded {
+                session_id: "s1".into(),
+                ended_at: at(1800),
+            },
         ));
         race.push(entry(
             "e4",
             110,
             "laptop",
-            Event::SessionEnded { session_id: "s1".into(), ended_at: at(1900) },
+            Event::SessionEnded {
+                session_id: "s1".into(),
+                ended_at: at(1900),
+            },
         ));
 
         let state = project(&race);
@@ -631,7 +685,10 @@ mod tests {
 
         let product = state.product("prod-cuba").unwrap();
         assert_eq!(product.name, "CUBA PEACH X", "the phone's rename survived");
-        assert_eq!(product.nominal_mg, 16.0, "and so did the laptop's dose change");
+        assert_eq!(
+            product.nominal_mg, 16.0,
+            "and so did the laptop's dose change"
+        );
     }
 
     #[test]
@@ -648,7 +705,14 @@ mod tests {
                     started_at: at(10),
                 },
             ),
-            entry("e3", 20, "phone", Event::ProductRetired { product_id: "prod-cuba".into() }),
+            entry(
+                "e3",
+                20,
+                "phone",
+                Event::ProductRetired {
+                    product_id: "prod-cuba".into(),
+                },
+            ),
         ]);
 
         assert!(state.active_products().is_empty(), "no longer offered");
@@ -662,7 +726,14 @@ mod tests {
     #[test]
     fn a_discard_applies_even_if_it_arrives_before_the_session() {
         let out_of_order = vec![
-            entry("e3", 5, "phone", Event::SessionDiscarded { session_id: "s1".into() }),
+            entry(
+                "e3",
+                5,
+                "phone",
+                Event::SessionDiscarded {
+                    session_id: "s1".into(),
+                },
+            ),
             entry("e1", 0, "phone", cuba()),
             entry(
                 "e2",
@@ -717,7 +788,11 @@ mod tests {
             ));
         }
         let state = project(&entries);
-        let names: Vec<&str> = state.active_products().iter().map(|p| p.name.as_str()).collect();
+        let names: Vec<&str> = state
+            .active_products()
+            .iter()
+            .map(|p| p.name.as_str())
+            .collect();
         assert_eq!(names, vec!["AROMA KING", "CUBA PEACH", "Killa", "ZYN"]);
     }
 

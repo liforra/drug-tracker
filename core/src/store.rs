@@ -79,7 +79,9 @@ impl Store {
     pub fn meta(&self, key: &str) -> Result<Option<String>> {
         Ok(self
             .conn
-            .query_row("SELECT value FROM meta WHERE key = ?1", params![key], |r| r.get(0))
+            .query_row("SELECT value FROM meta WHERE key = ?1", params![key], |r| {
+                r.get(0)
+            })
             .optional()?)
     }
 
@@ -94,7 +96,10 @@ impl Store {
 
     /// Highest server cursor this device has pulled.
     pub fn cursor(&self) -> Result<i64> {
-        Ok(self.meta("cursor")?.and_then(|v| v.parse().ok()).unwrap_or(0))
+        Ok(self
+            .meta("cursor")?
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0))
     }
 
     pub fn set_cursor(&self, seq: i64) -> Result<()> {
@@ -110,8 +115,10 @@ impl Store {
         device_secret: &[u8],
         lease_share: &[u8],
     ) -> Result<()> {
-        let plain: Vec<(i64, Vec<u8>)> =
-            deks.iter().map(|(epoch, dek)| (*epoch, dek.as_bytes().to_vec())).collect();
+        let plain: Vec<(i64, Vec<u8>)> = deks
+            .iter()
+            .map(|(epoch, dek)| (*epoch, dek.as_bytes().to_vec()))
+            .collect();
         let serialised = serde_json::to_vec(&plain)?;
         let wrapped = wrap_local(&local_wrapping_key(device_secret, lease_share), &serialised)?;
 
@@ -126,7 +133,9 @@ impl Store {
     pub fn load_deks(&self, device_secret: &[u8], lease_share: &[u8]) -> Result<Vec<(i64, Dek)>> {
         let wrapped: Option<Vec<u8>> = self
             .conn
-            .query_row("SELECT wrapped FROM dek_bundle WHERE id = 1", [], |r| r.get(0))
+            .query_row("SELECT wrapped FROM dek_bundle WHERE id = 1", [], |r| {
+                r.get(0)
+            })
             .optional()?;
         let Some(wrapped) = wrapped else {
             return Ok(Vec::new());
@@ -136,9 +145,7 @@ impl Store {
         let raw: Vec<(i64, Vec<u8>)> = serde_json::from_slice(&plain)?;
 
         raw.into_iter()
-            .map(|(epoch, bytes)| {
-                Ok((epoch, Dek::from_bytes(crate::crypto::to_key(&bytes)?)))
-            })
+            .map(|(epoch, bytes)| Ok((epoch, Dek::from_bytes(crate::crypto::to_key(&bytes)?))))
             .collect()
     }
 
@@ -181,6 +188,8 @@ impl Store {
         Ok(())
     }
 
+    /// (id, epoch, nonce, ciphertext) of an entry not yet pushed.
+    #[allow(clippy::type_complexity)]
     pub fn pending(&self, limit: i64) -> Result<Vec<(String, i64, Vec<u8>, Vec<u8>)>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, epoch, nonce, ciphertext FROM entries
@@ -219,12 +228,15 @@ impl Store {
     /// change moves it. And it is an index-only query, which is what makes it cheap
     /// enough to ask on a short timer.
     pub fn revision(&self) -> Result<i64> {
-        Ok(self.conn.query_row("SELECT COUNT(*) FROM entries", [], |row| row.get(0))?)
+        Ok(self
+            .conn
+            .query_row("SELECT COUNT(*) FROM entries", [], |row| row.get(0))?)
     }
 
     pub fn load_entries(&self, deks: &[(i64, Dek)]) -> Result<(Vec<LogEntry>, usize)> {
-        let mut stmt =
-            self.conn.prepare("SELECT id, epoch, nonce, ciphertext FROM entries ORDER BY id ASC")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, epoch, nonce, ciphertext FROM entries ORDER BY id ASC")?;
         let rows = stmt.query_map([], |row| {
             Ok((
                 row.get::<_, String>(0)?,
@@ -278,7 +290,9 @@ mod tests {
     fn what_is_on_disk_is_not_readable_without_the_key() {
         let store = Store::open_in_memory().unwrap();
         let deks = dek_set();
-        store.append(&seed_products("phone").remove(0), 1, &deks[0].1).unwrap();
+        store
+            .append(&seed_products("phone").remove(0), 1, &deks[0].1)
+            .unwrap();
 
         let blob: Vec<u8> = store
             .conn
@@ -301,9 +315,19 @@ mod tests {
         let epoch1 = Dek::generate().unwrap();
         let epoch2 = Dek::generate().unwrap();
 
-        let mine = LogEntry::new("phone", Event::ProductRetired { product_id: "p".into() });
+        let mine = LogEntry::new(
+            "phone",
+            Event::ProductRetired {
+                product_id: "p".into(),
+            },
+        );
         store.append(&mine, 2, &epoch2).unwrap();
-        let theirs = LogEntry::new("laptop", Event::ProductRetired { product_id: "q".into() });
+        let theirs = LogEntry::new(
+            "laptop",
+            Event::ProductRetired {
+                product_id: "q".into(),
+            },
+        );
         store.append(&theirs, 1, &epoch1).unwrap();
 
         // A device enrolled late holds only epoch 2.
@@ -331,14 +355,20 @@ mod tests {
     fn a_record_pulled_from_the_server_is_not_queued_for_pushing_back() {
         let store = Store::open_in_memory().unwrap();
         store.ingest("remote-1", 1, b"nonce", b"ct", 7).unwrap();
-        assert_eq!(store.pending_count().unwrap(), 0, "sync must not loop records forever");
+        assert_eq!(
+            store.pending_count().unwrap(),
+            0,
+            "sync must not loop records forever"
+        );
     }
 
     #[test]
     fn deks_survive_a_restart_only_with_both_key_halves() {
         let store = Store::open_in_memory().unwrap();
         let deks = dek_set();
-        store.save_deks(&deks, b"device-secret", b"lease-share").unwrap();
+        store
+            .save_deks(&deks, b"device-secret", b"lease-share")
+            .unwrap();
 
         let restored = store.load_deks(b"device-secret", b"lease-share").unwrap();
         assert_eq!(restored.len(), 1);
@@ -353,7 +383,9 @@ mod tests {
         let store = Store::open_in_memory().unwrap();
         let deks = dek_set();
         store.save_deks(&deks, b"secret", b"share").unwrap();
-        store.append(&seed_products("phone").remove(0), 1, &deks[0].1).unwrap();
+        store
+            .append(&seed_products("phone").remove(0), 1, &deks[0].1)
+            .unwrap();
 
         store.wipe_keys().unwrap();
 

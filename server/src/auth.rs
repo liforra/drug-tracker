@@ -113,7 +113,11 @@ pub fn verify_challenge(conn: &Connection, nonce: &str, signature_b64: &str) -> 
         params![token, device_id, expires_at],
     )?;
 
-    Ok(Session { token, expires_at, device })
+    Ok(Session {
+        token,
+        expires_at,
+        device,
+    })
 }
 
 /// Resolve a bearer token to its device, rejecting revoked devices even if the token
@@ -137,6 +141,9 @@ pub fn authenticate(conn: &Connection, token: &str) -> Result<Device> {
 /// Drop every token belonging to a device. Called on revocation so an in-flight session
 /// dies with it.
 pub fn drop_tokens(conn: &Connection, device_id: &str) -> Result<()> {
-    conn.execute("DELETE FROM tokens WHERE device_id = ?1", params![device_id])?;
+    conn.execute(
+        "DELETE FROM tokens WHERE device_id = ?1",
+        params![device_id],
+    )?;
     Ok(())
 }

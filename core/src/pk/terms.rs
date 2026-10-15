@@ -32,7 +32,9 @@ impl ExpSum {
     }
 
     pub fn single(coeff: f64, lambda: f64) -> Self {
-        Self { terms: vec![ExpTerm { coeff, lambda }] }
+        Self {
+            terms: vec![ExpTerm { coeff, lambda }],
+        }
     }
 
     pub fn from_terms(terms: impl IntoIterator<Item = (f64, f64)>) -> Self {
@@ -63,7 +65,10 @@ impl ExpSum {
             terms: self
                 .terms
                 .iter()
-                .map(|t| ExpTerm { coeff: -t.lambda * t.coeff, lambda: t.lambda })
+                .map(|t| ExpTerm {
+                    coeff: -t.lambda * t.coeff,
+                    lambda: t.lambda,
+                })
                 .collect(),
         }
     }
@@ -73,7 +78,10 @@ impl ExpSum {
             terms: self
                 .terms
                 .iter()
-                .map(|t| ExpTerm { coeff: t.coeff * factor, lambda: t.lambda })
+                .map(|t| ExpTerm {
+                    coeff: t.coeff * factor,
+                    lambda: t.lambda,
+                })
                 .collect(),
         }
     }
@@ -97,7 +105,10 @@ impl ExpSum {
     pub fn through_compartment(&self, gain: f64, k_out: f64, carry_in: f64) -> Self {
         let mut out = Vec::with_capacity(self.terms.len() * 2 + 1);
         if carry_in != 0.0 {
-            out.push(ExpTerm { coeff: carry_in, lambda: k_out });
+            out.push(ExpTerm {
+                coeff: carry_in,
+                lambda: k_out,
+            });
         }
         for term in &self.terms {
             let mut lambda = term.lambda;
@@ -105,8 +116,14 @@ impl ExpSum {
                 lambda += LAMBDA_EPS;
             }
             let amplitude = gain * term.coeff / (k_out - lambda);
-            out.push(ExpTerm { coeff: amplitude, lambda });
-            out.push(ExpTerm { coeff: -amplitude, lambda: k_out });
+            out.push(ExpTerm {
+                coeff: amplitude,
+                lambda,
+            });
+            out.push(ExpTerm {
+                coeff: -amplitude,
+                lambda: k_out,
+            });
         }
         Self { terms: out }
     }
@@ -119,7 +136,10 @@ impl ExpSum {
             terms: self
                 .terms
                 .iter()
-                .map(|t| ExpTerm { coeff: t.coeff * (-t.lambda * shift).exp(), lambda: t.lambda })
+                .map(|t| ExpTerm {
+                    coeff: t.coeff * (-t.lambda * shift).exp(),
+                    lambda: t.lambda,
+                })
                 .collect(),
         }
     }

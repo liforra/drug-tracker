@@ -83,7 +83,9 @@ fn main() -> ExitCode {
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 
 fn run_tray() -> Result {
-    let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
     runtime.block_on(async {
         let (updates_tx, mut updates_rx) = tokio::sync::mpsc::unbounded_channel();
         let commands = worker::spawn(updates_tx);
@@ -230,21 +232,19 @@ fn set_duration(args: &[String]) -> Result {
     let [needle, minutes] = args else {
         return Err("dauer braucht <sorte> <minuten>".into());
     };
-    let minutes: f64 = minutes.replace(',', ".").parse().map_err(|_| "Minuten sind keine Zahl")?;
+    let minutes: f64 = minutes
+        .replace(',', ".")
+        .parse()
+        .map_err(|_| "Minuten sind keine Zahl")?;
     if !(1.0..=600.0).contains(&minutes) {
         return Err("Minuten müssen zwischen 1 und 600 liegen".into());
     }
 
     let mut session = session::Session::open()?;
     let product = find_product(session.tracker.state(), needle)?;
-    session.tracker.update_product(
-        &product.0,
-        None,
-        None,
-        Some(minutes * 60.0),
-        None,
-        None,
-    )?;
+    session
+        .tracker
+        .update_product(&product.0, None, None, Some(minutes * 60.0), None, None)?;
     let _ = session.sync();
     println!("{}: gibt jetzt über {minutes:.0} Minuten ab.", product.1);
     Ok(())
@@ -382,29 +382,56 @@ fn status() -> Result {
     let curves = levels::build(state);
     let now = chrono::Utc::now();
 
-    println!("Verbindung: {}", if session.online { "online" } else { "offline" });
+    println!(
+        "Verbindung: {}",
+        if session.online { "online" } else { "offline" }
+    );
     println!("Nikotin:    {:.1} ng/mL", curves.nicotine_at(now));
     // The number that matches how a pouch feels. Receptors respond to change and
     // desensitise under a steady level, so the slope says more than the level does.
-    println!("Anflutung:  {:+.2} ng/mL pro Minute", curves.nicotine_rate_at(now));
+    println!(
+        "Anflutung:  {:+.2} ng/mL pro Minute",
+        curves.nicotine_rate_at(now)
+    );
     println!("Cotinin:    {:.0} ng/mL", curves.cotinine_at(now));
-    println!("Heute:      {} Pouches, {:.1} mg", levels::today_count(state), levels::today_mg(state));
+    println!(
+        "Heute:      {} Pouches, {:.1} mg",
+        levels::today_count(state),
+        levels::today_mg(state)
+    );
     println!(
         "Körper:     {:.0} kg{}",
         curves.subject.body_mass_kg,
-        if state.body_mass_kg.is_none() { " (Default — `snus body <kg>` setzen)" } else { "" }
+        if state.body_mass_kg.is_none() {
+            " (Default — `snus body <kg>` setzen)"
+        } else {
+            ""
+        }
     );
 
     match state.open_sessions().first() {
         Some(open) => {
-            let name = state.product(&open.product_id).map(|p| p.name.as_str()).unwrap_or("?");
-            let what = if open.is_paused() { "ruht seit" } else { "seit" };
-            println!("Aktiv:      {name} {what} {}", tray::format_elapsed(open.started_at));
+            let name = state
+                .product(&open.product_id)
+                .map(|p| p.name.as_str())
+                .unwrap_or("?");
+            let what = if open.is_paused() {
+                "ruht seit"
+            } else {
+                "seit"
+            };
+            println!(
+                "Aktiv:      {name} {what} {}",
+                tray::format_elapsed(open.started_at)
+            );
             if let Some(left) = levels::remaining_release(state, open, now) {
                 if left.num_seconds() == 0 {
                     println!("Pouch:      leer — gibt nichts mehr ab");
                 } else {
-                    println!("Pouch:      noch {} Freisetzung", tray::format_duration(left));
+                    println!(
+                        "Pouch:      noch {} Freisetzung",
+                        tray::format_duration(left)
+                    );
                 }
             }
         }
@@ -413,7 +440,10 @@ fn status() -> Result {
 
     println!("\nSorten:");
     for product in state.active_products() {
-        println!("  {:<24} {:>5.1} mg   {}", product.name, product.nominal_mg, product.id);
+        println!(
+            "  {:<24} {:>5.1} mg   {}",
+            product.name, product.nominal_mg, product.id
+        );
     }
     Ok(())
 }
@@ -424,7 +454,10 @@ fn approve() -> Result {
     if devices.is_empty() {
         println!("Keine weiteren Geräte.");
     } else {
-        println!("Neuer Datenschlüssel für {} Gerät(e) veröffentlicht.", devices.len());
+        println!(
+            "Neuer Datenschlüssel für {} Gerät(e) veröffentlicht.",
+            devices.len()
+        );
     }
     Ok(())
 }
@@ -439,7 +472,9 @@ fn invite() -> Result {
     let session = session::Session::open()?;
     let response = session.client.create_invite()?;
 
-    let code = response["code"].as_str().ok_or("Server lieferte keinen Code")?;
+    let code = response["code"]
+        .as_str()
+        .ok_or("Server lieferte keinen Code")?;
     let expires_at = response["expires_at"].as_i64().unwrap_or_default();
     let minutes = ((expires_at - chrono::Utc::now().timestamp()) / 60).max(0);
 
@@ -464,5 +499,8 @@ fn invite() -> Result {
 }
 
 fn hostname() -> Option<String> {
-    std::fs::read_to_string("/etc/hostname").ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+    std::fs::read_to_string("/etc/hostname")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
 }

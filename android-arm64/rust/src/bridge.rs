@@ -103,8 +103,12 @@ fn ok(value: Value) -> String {
 }
 
 fn decode32(encoded: &str, what: &str) -> Result<[u8; 32], String> {
-    let raw = BASE64_STANDARD.decode(encoded).map_err(|e| format!("{what}: {e}"))?;
-    raw.as_slice().try_into().map_err(|_| format!("{what} must be 32 bytes"))
+    let raw = BASE64_STANDARD
+        .decode(encoded)
+        .map_err(|e| format!("{what}: {e}"))?;
+    raw.as_slice()
+        .try_into()
+        .map_err(|_| format!("{what} must be 32 bytes"))
 }
 
 /// Create this device's long-term keys. The caller stores the blob in the Android
@@ -115,7 +119,10 @@ pub fn generate_identity() -> String {
         Ok(identity) => {
             use rand::TryRngCore;
             let mut device_secret = [0u8; 32];
-            if rand::rngs::OsRng.try_fill_bytes(&mut device_secret).is_err() {
+            if rand::rngs::OsRng
+                .try_fill_bytes(&mut device_secret)
+                .is_err()
+            {
                 return error("entropy source failed");
             }
             let mut blob = Vec::with_capacity(96);
@@ -168,8 +175,10 @@ pub fn enroll(request_json: &str) -> String {
         Err(e) => return error(e),
     };
 
-    let client =
-        SyncClient::new(ServerConfig { base_url: request.server_url, server_pub });
+    let client = SyncClient::new(ServerConfig {
+        base_url: request.server_url,
+        server_pub,
+    });
 
     // Only honoured for the account's first device; later ones send it and the server
     // keeps the key it already has.
@@ -234,7 +243,10 @@ pub fn open(request_json: &str) -> String {
         .and_then(|encoded| BASE64_STANDARD.decode(encoded).ok());
     let mut lease_expires = request.cached_lease_expires_at.unwrap_or(0);
 
-    if client.authenticate(&request.device_id, &identity.ed25519).is_ok() {
+    if client
+        .authenticate(&request.device_id, &identity.ed25519)
+        .is_ok()
+    {
         match client.lease_acquire() {
             Ok(lease) => {
                 if let Ok(share) = BASE64_STANDARD.decode(&lease.key_share) {
@@ -252,12 +264,17 @@ pub fn open(request_json: &str) -> String {
         return error("locked: no valid lease and the server is unreachable");
     };
 
-    let store = match Store::open(std::path::Path::new(&request.data_dir).join("records.db").as_path())
-    {
+    let store = match Store::open(
+        std::path::Path::new(&request.data_dir)
+            .join("records.db")
+            .as_path(),
+    ) {
         Ok(s) => s,
         Err(e) => return error(e),
     };
-    let deks = store.load_deks(&device_secret, &lease_share).unwrap_or_default();
+    let deks = store
+        .load_deks(&device_secret, &lease_share)
+        .unwrap_or_default();
 
     let mut tracker = match Tracker::open(store, deks, request.device_id.clone()) {
         Ok(t) => t,
@@ -265,16 +282,19 @@ pub fn open(request_json: &str) -> String {
     };
 
     // A device that just enrolled has no key yet; collect whatever has been sealed to it.
-    if tracker.is_locked() && online {
-        if let Ok(wraps) = client.deks(0) {
-            for wrap in wraps {
-                let Ok(sealed) = BASE64_STANDARD.decode(&wrap.wrapped_dek) else { continue };
-                if let Ok(dek) = Dek::unwrap_with(&identity.x25519, &sealed) {
-                    let _ = tracker.add_dek(wrap.epoch, dek);
-                }
+    if tracker.is_locked()
+        && online
+        && let Ok(wraps) = client.deks(0)
+    {
+        for wrap in wraps {
+            let Ok(sealed) = BASE64_STANDARD.decode(&wrap.wrapped_dek) else {
+                continue;
+            };
+            if let Ok(dek) = Dek::unwrap_with(&identity.x25519, &sealed) {
+                let _ = tracker.add_dek(wrap.epoch, dek);
             }
-            let _ = tracker.persist_deks(&device_secret, &lease_share);
         }
+        let _ = tracker.persist_deks(&device_secret, &lease_share);
     }
 
     let locked = tracker.is_locked();
@@ -372,7 +392,10 @@ pub fn start_session(product_id: &str) -> String {
 
 pub fn end_session(session_id: &str) -> String {
     let result = with_instance(|instance| {
-        instance.tracker.end_session(session_id).map_err(|e| e.to_string())?;
+        instance
+            .tracker
+            .end_session(session_id)
+            .map_err(|e| e.to_string())?;
         let _ = instance.tracker.sync(&instance.client);
         Ok(build_snapshot(instance))
     });
@@ -385,7 +408,10 @@ pub fn end_session(session_id: &str) -> String {
 /// Take the pouch out without ending the session: absorption stops, the session runs on.
 pub fn pause_session(session_id: &str) -> String {
     let result = with_instance(|instance| {
-        instance.tracker.pause_session(session_id).map_err(|e| e.to_string())?;
+        instance
+            .tracker
+            .pause_session(session_id)
+            .map_err(|e| e.to_string())?;
         let _ = instance.tracker.sync(&instance.client);
         Ok(build_snapshot(instance))
     });
@@ -397,7 +423,10 @@ pub fn pause_session(session_id: &str) -> String {
 
 pub fn resume_session(session_id: &str) -> String {
     let result = with_instance(|instance| {
-        instance.tracker.resume_session(session_id).map_err(|e| e.to_string())?;
+        instance
+            .tracker
+            .resume_session(session_id)
+            .map_err(|e| e.to_string())?;
         let _ = instance.tracker.sync(&instance.client);
         Ok(build_snapshot(instance))
     });
@@ -412,7 +441,10 @@ pub fn resume_session(session_id: &str) -> String {
 /// to write a wrong record.
 pub fn discard_session(session_id: &str) -> String {
     let result = with_instance(|instance| {
-        instance.tracker.discard_session(session_id).map_err(|e| e.to_string())?;
+        instance
+            .tracker
+            .discard_session(session_id)
+            .map_err(|e| e.to_string())?;
         let _ = instance.tracker.sync(&instance.client);
         Ok(build_snapshot(instance))
     });
@@ -428,7 +460,10 @@ pub fn discard_session(session_id: &str) -> String {
 /// against this variety still need it to compute their curves.
 pub fn retire_product(product_id: &str) -> String {
     let result = with_instance(|instance| {
-        instance.tracker.retire_product(product_id).map_err(|e| e.to_string())?;
+        instance
+            .tracker
+            .retire_product(product_id)
+            .map_err(|e| e.to_string())?;
         let _ = instance.tracker.sync(&instance.client);
         Ok(build_snapshot(instance))
     });
@@ -479,8 +514,8 @@ pub fn update_subject(body_mass_kg: Option<f64>, metabolism_factor: Option<f64>)
 pub fn samples(from_secs: i64, to_secs: i64, steps: usize) -> String {
     let result = with_instance(|instance| {
         let state = instance.tracker.state();
-        let from = chrono::DateTime::from_timestamp(from_secs, 0)
-            .ok_or_else(|| "bad from".to_string())?;
+        let from =
+            chrono::DateTime::from_timestamp(from_secs, 0).ok_or_else(|| "bad from".to_string())?;
         let to =
             chrono::DateTime::from_timestamp(to_secs, 0).ok_or_else(|| "bad to".to_string())?;
         let curves = levels::build_at(state, to);
@@ -501,7 +536,15 @@ pub fn add_product(name: &str, nominal_mg: f64, accent: Option<String>) -> Strin
     let result = with_instance(|instance| {
         instance
             .tracker
-            .define_product(name, "nicotine", "buccal_pouch", nominal_mg, Some(1800.0), accent, None)
+            .define_product(
+                name,
+                "nicotine",
+                "buccal_pouch",
+                nominal_mg,
+                Some(1800.0),
+                accent,
+                None,
+            )
             .map_err(|e| e.to_string())?;
         let _ = instance.tracker.sync(&instance.client);
         Ok(build_snapshot(instance))
@@ -523,18 +566,17 @@ pub fn sync() -> String {
             Err(_) => instance.online = false,
         }
         // Rewrap under a fresh lease share while we are online anyway.
-        if instance.online {
-            if let Ok(rotated) = instance.client.lease_rotate() {
-                if let Some(pending) = rotated.key_share_pending {
-                    if let Ok(share) = BASE64_STANDARD.decode(&pending) {
-                        if instance.tracker.persist_deks(&instance.device_secret, &share).is_ok()
-                            && instance.client.lease_commit().is_ok()
-                        {
-                            instance.lease_share = share;
-                        }
-                    }
-                }
-            }
+        if instance.online
+            && let Ok(rotated) = instance.client.lease_rotate()
+            && let Some(pending) = rotated.key_share_pending
+            && let Ok(share) = BASE64_STANDARD.decode(&pending)
+            && instance
+                .tracker
+                .persist_deks(&instance.device_secret, &share)
+                .is_ok()
+            && instance.client.lease_commit().is_ok()
+        {
+            instance.lease_share = share;
         }
         Ok(build_snapshot(instance))
     });
@@ -574,14 +616,25 @@ pub fn approve_devices() -> String {
             return Ok(0usize);
         }
 
-        let next = instance.client.current_epoch().map_err(|e| e.to_string())?.unwrap_or(0) + 1;
+        let next = instance
+            .client
+            .current_epoch()
+            .map_err(|e| e.to_string())?
+            .unwrap_or(0)
+            + 1;
         let dek = Dek::generate().map_err(|e| e.to_string())?;
         let mut wraps = Vec::new();
         for (id, key) in &targets {
             wraps.push((id.clone(), dek.wrap_to(key).map_err(|e| e.to_string())?));
         }
-        instance.client.publish_epoch(next, &wraps).map_err(|e| e.to_string())?;
-        instance.tracker.add_dek(next, dek).map_err(|e| e.to_string())?;
+        instance
+            .client
+            .publish_epoch(next, &wraps)
+            .map_err(|e| e.to_string())?;
+        instance
+            .tracker
+            .add_dek(next, dek)
+            .map_err(|e| e.to_string())?;
         let _ = instance
             .tracker
             .persist_deks(&instance.device_secret, &instance.lease_share);
@@ -592,12 +645,19 @@ pub fn approve_devices() -> String {
         // is safe to run on every approval.
         let mut backfill: Vec<(i64, String, Vec<u8>)> = Vec::new();
         for (id, key) in &targets {
-            for (epoch, wrapped) in instance.tracker.wrap_all_to(key).map_err(|e| e.to_string())? {
+            for (epoch, wrapped) in instance
+                .tracker
+                .wrap_all_to(key)
+                .map_err(|e| e.to_string())?
+            {
                 backfill.push((epoch, id.clone(), wrapped));
             }
         }
         if !backfill.is_empty() {
-            instance.client.publish_wraps(&backfill).map_err(|e| e.to_string())?;
+            instance
+                .client
+                .publish_wraps(&backfill)
+                .map_err(|e| e.to_string())?;
         }
         Ok(targets.len())
     });
@@ -613,7 +673,8 @@ pub fn approve_devices() -> String {
 /// already on this phone, so the app assembles the QR payload around them -- the same
 /// `snus://enroll` shape `snus invite` prints on the laptop.
 pub fn create_invite() -> String {
-    let result = with_instance(|instance| instance.client.create_invite().map_err(|e| e.to_string()));
+    let result =
+        with_instance(|instance| instance.client.create_invite().map_err(|e| e.to_string()));
     match result {
         Ok(response) => match response["code"].as_str() {
             Some(code) => ok(json!({
@@ -629,18 +690,30 @@ pub fn create_invite() -> String {
 /// Mint the account's first data key and seed the starting variety.
 pub fn bootstrap_account() -> String {
     let result = with_instance(|instance| {
-        if instance.client.current_epoch().map_err(|e| e.to_string())?.is_some() {
+        if instance
+            .client
+            .current_epoch()
+            .map_err(|e| e.to_string())?
+            .is_some()
+        {
             return Ok(false);
         }
         let dek = Dek::generate().map_err(|e| e.to_string())?;
         instance
             .client
-            .publish_epoch(1, &[(
-                instance.tracker.device_id().to_string(),
-                dek.wrap_to(&instance.identity.x25519_public()).map_err(|e| e.to_string())?,
-            )])
+            .publish_epoch(
+                1,
+                &[(
+                    instance.tracker.device_id().to_string(),
+                    dek.wrap_to(&instance.identity.x25519_public())
+                        .map_err(|e| e.to_string())?,
+                )],
+            )
             .map_err(|e| e.to_string())?;
-        instance.tracker.add_dek(1, dek).map_err(|e| e.to_string())?;
+        instance
+            .tracker
+            .add_dek(1, dek)
+            .map_err(|e| e.to_string())?;
         instance
             .tracker
             .persist_deks(&instance.device_secret, &instance.lease_share)
@@ -648,7 +721,15 @@ pub fn bootstrap_account() -> String {
 
         instance
             .tracker
-            .define_product("CUBA PEACH", "nicotine", "buccal_pouch", 10.4, Some(1800.0), Some("#F2994A".into()), None)
+            .define_product(
+                "CUBA PEACH",
+                "nicotine",
+                "buccal_pouch",
+                10.4,
+                Some(1800.0),
+                Some("#F2994A".into()),
+                None,
+            )
             .map_err(|e| e.to_string())?;
         let _ = instance.tracker.sync(&instance.client);
         Ok(true)

@@ -62,7 +62,11 @@ pub struct Snapshot {
 
 impl Snapshot {
     fn locked_with(status: impl Into<String>) -> Self {
-        Self { locked: true, status: status.into(), ..Default::default() }
+        Self {
+            locked: true,
+            status: status.into(),
+            ..Default::default()
+        }
     }
 }
 
@@ -75,7 +79,11 @@ fn snapshot(session: &Session, status: String) -> Snapshot {
         products: state
             .active_products()
             .into_iter()
-            .map(|p| ProductButton { id: p.id.clone(), name: p.name.clone(), nominal_mg: p.nominal_mg })
+            .map(|p| ProductButton {
+                id: p.id.clone(),
+                name: p.name.clone(),
+                nominal_mg: p.nominal_mg,
+            })
             .collect(),
         open: state.open_sessions().first().map(|s| OpenSession {
             session_id: s.id.clone(),
@@ -110,9 +118,7 @@ const SYNC_INTERVAL: Duration = Duration::from_secs(3600);
 /// with nothing to do is one indexed COUNT, so a few seconds costs nothing.
 const POLL: Duration = Duration::from_secs(3);
 
-pub fn spawn(
-    updates: tokio::sync::mpsc::UnboundedSender<Snapshot>,
-) -> mpsc::Sender<Command> {
+pub fn spawn(updates: tokio::sync::mpsc::UnboundedSender<Snapshot>) -> mpsc::Sender<Command> {
     let (tx, rx) = mpsc::channel::<Command>();
 
     std::thread::spawn(move || {
@@ -123,7 +129,10 @@ pub fn spawn(
                 // Stay alive so the tray still shows why, and so Quit still works.
                 while let Ok(command) = rx.recv() {
                     if matches!(command, Command::Quit) {
-                        let _ = updates.send(Snapshot { quit: true, ..Default::default() });
+                        let _ = updates.send(Snapshot {
+                            quit: true,
+                            ..Default::default()
+                        });
                         return;
                     }
                 }
@@ -187,7 +196,10 @@ pub fn spawn(
                 Ok(Command::Quit) => {
                     // Best effort: get anything queued onto the server before going.
                     let _ = session.sync();
-                    let _ = updates.send(Snapshot { quit: true, ..Default::default() });
+                    let _ = updates.send(Snapshot {
+                        quit: true,
+                        ..Default::default()
+                    });
                     return;
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {}
@@ -258,5 +270,8 @@ fn report_sync(session: &mut Session) -> String {
 /// is far less trouble than trying to share.
 fn open_stats_window() -> std::io::Result<()> {
     let executable = std::env::current_exe()?;
-    std::process::Command::new(executable).arg("stats").spawn().map(|_| ())
+    std::process::Command::new(executable)
+        .arg("stats")
+        .spawn()
+        .map(|_| ())
 }

@@ -25,8 +25,7 @@ const SWEEP_INTERVAL_SECS: u64 = 900;
 /// Run maintenance on a timer for as long as the server is up.
 fn spawn_sweeper(db: Arc<Mutex<rusqlite::Connection>>, retention: maintenance::Retention) {
     tokio::spawn(async move {
-        let mut ticker =
-            tokio::time::interval(std::time::Duration::from_secs(SWEEP_INTERVAL_SECS));
+        let mut ticker = tokio::time::interval(std::time::Duration::from_secs(SWEEP_INTERVAL_SECS));
         loop {
             ticker.tick().await;
             let outcome = {

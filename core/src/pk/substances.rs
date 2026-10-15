@@ -18,7 +18,9 @@ pub fn nicotine() -> Substance {
         id: "nicotine".into(),
         display_name: "Nikotin".into(),
         // t1/2 ranges roughly 1-4 h depending on CYP2A6 activity. This is the midpoint.
-        disposition: Disposition::OneCompartment { half_life_secs: 2.0 * HOUR },
+        disposition: Disposition::OneCompartment {
+            half_life_secs: 2.0 * HOUR,
+        },
         vd_l_per_kg: 2.6,
         routes: vec![
             Route {
@@ -45,7 +47,9 @@ pub fn nicotine() -> Substance {
                 // their measured 10/20/30-minute AUC ratios of 0.57 : 0.85 : 1.00 as
                 // 0.51 : 0.82 : 1.00, and their Cmax of 21.6 ng/mL to within a few
                 // percent.
-                absorption: Absorption::FirstOrder { half_life_secs: 14.0 * MIN },
+                absorption: Absorption::FirstOrder {
+                    half_life_secs: 14.0 * MIN,
+                },
                 lag_secs: 1.0 * MIN,
                 // Not a hard limit: with first-order release nothing is ever strictly
                 // empty. It is the point where the pouch is done in any practical
@@ -56,7 +60,9 @@ pub fn nicotine() -> Substance {
                 id: "smoked".into(),
                 display_name: "Geraucht".into(),
                 bioavailability: 0.20,
-                absorption: Absorption::FirstOrder { half_life_secs: 1.0 * MIN },
+                absorption: Absorption::FirstOrder {
+                    half_life_secs: 1.0 * MIN,
+                },
                 lag_secs: 0.0,
                 default_duration_secs: None,
             },
@@ -86,13 +92,17 @@ pub fn caffeine() -> Substance {
     Substance {
         id: "caffeine".into(),
         display_name: "Koffein".into(),
-        disposition: Disposition::OneCompartment { half_life_secs: 5.0 * HOUR },
+        disposition: Disposition::OneCompartment {
+            half_life_secs: 5.0 * HOUR,
+        },
         vd_l_per_kg: 0.6,
         routes: vec![Route {
             id: "oral".into(),
             display_name: "Oral".into(),
             bioavailability: 0.99,
-            absorption: Absorption::FirstOrder { half_life_secs: 10.0 * MIN },
+            absorption: Absorption::FirstOrder {
+                half_life_secs: 10.0 * MIN,
+            },
             lag_secs: 5.0 * MIN,
             default_duration_secs: None,
         }],
@@ -134,7 +144,9 @@ pub fn cocaine() -> Substance {
                 display_name: "Nasal".into(),
                 bioavailability: 0.70,
                 // Vasoconstriction slows its own uptake; Tmax lands around 30-60 min.
-                absorption: Absorption::FirstOrder { half_life_secs: 20.0 * MIN },
+                absorption: Absorption::FirstOrder {
+                    half_life_secs: 20.0 * MIN,
+                },
                 lag_secs: 2.0 * MIN,
                 default_duration_secs: None,
             },
@@ -158,7 +170,9 @@ pub fn cocaine() -> Substance {
                 id: "oral".into(),
                 display_name: "Oral".into(),
                 bioavailability: 0.30,
-                absorption: Absorption::FirstOrder { half_life_secs: 30.0 * MIN },
+                absorption: Absorption::FirstOrder {
+                    half_life_secs: 30.0 * MIN,
+                },
                 lag_secs: 10.0 * MIN,
                 default_duration_secs: None,
             },
@@ -190,13 +204,17 @@ pub fn ethanol() -> Substance {
         // Ethanol is really zero-order (Michaelis-Menten saturated) at typical doses.
         // A first-order approximation overstates the tail; flagged for a dedicated
         // elimination model before this entry is trusted quantitatively.
-        disposition: Disposition::OneCompartment { half_life_secs: 1.0 * HOUR },
+        disposition: Disposition::OneCompartment {
+            half_life_secs: 1.0 * HOUR,
+        },
         vd_l_per_kg: 0.6,
         routes: vec![Route {
             id: "oral".into(),
             display_name: "Oral".into(),
             bioavailability: 0.90,
-            absorption: Absorption::FirstOrder { half_life_secs: 15.0 * MIN },
+            absorption: Absorption::FirstOrder {
+                half_life_secs: 15.0 * MIN,
+            },
             lag_secs: 5.0 * MIN,
             default_duration_secs: None,
         }],

@@ -67,14 +67,20 @@ impl DoseResponse {
 fn disposition_terms(disposition: &Disposition, metabolism_factor: f64) -> Vec<(f64, f64)> {
     match disposition {
         Disposition::OneCompartment { half_life_secs } => {
-            vec![(1.0, rate_from_half_life(*half_life_secs) * metabolism_factor)]
+            vec![(
+                1.0,
+                rate_from_half_life(*half_life_secs) * metabolism_factor,
+            )]
         }
         Disposition::TwoCompartment {
             alpha_fraction,
             alpha_half_life_secs,
             beta_half_life_secs,
         } => vec![
-            (*alpha_fraction, rate_from_half_life(*alpha_half_life_secs) * metabolism_factor),
+            (
+                *alpha_fraction,
+                rate_from_half_life(*alpha_half_life_secs) * metabolism_factor,
+            ),
             (
                 1.0 - *alpha_fraction,
                 rate_from_half_life(*beta_half_life_secs) * metabolism_factor,
@@ -106,9 +112,17 @@ pub fn dose_response(
         // Everything lands at once: intravenous, or smoked where Tmax is seconds.
         Absorption::Bolus => {
             let sum = ExpSum::from_terms(
-                terms.iter().map(|(frac, lambda)| (absorbed_mg * frac, *lambda)),
+                terms
+                    .iter()
+                    .map(|(frac, lambda)| (absorbed_mg * frac, *lambda)),
             );
-            DoseResponse { pieces: vec![Piece { start_secs: origin, end_secs: None, sum }] }
+            DoseResponse {
+                pieces: vec![Piece {
+                    start_secs: origin,
+                    end_secs: None,
+                    sum,
+                }],
+            }
         }
 
         // Uptake from a depot that itself decays: a pouch in the mouth, oral, intranasal.
@@ -123,7 +137,10 @@ pub fn dose_response(
             let per_phase: Vec<(f64, ExpSum)> = terms
                 .iter()
                 .map(|(frac, lambda)| {
-                    (*lambda, depot.through_compartment(k_a, *lambda, 0.0).scaled(*frac))
+                    (
+                        *lambda,
+                        depot.through_compartment(k_a, *lambda, 0.0).scaled(*frac),
+                    )
                 })
                 .collect();
 
@@ -157,7 +174,11 @@ pub fn dose_response(
                 },
                 // Depot stays until it is exhausted: swallowed, insufflated, injected.
                 _ => DoseResponse {
-                    pieces: vec![Piece { start_secs: origin, end_secs: None, sum: during }],
+                    pieces: vec![Piece {
+                        start_secs: origin,
+                        end_secs: None,
+                        sum: during,
+                    }],
                 },
             }
         }
@@ -232,7 +253,11 @@ pub fn metabolite_response(
         if let Some(end) = piece.end_secs {
             carry = sum.eval(end - piece.start_secs);
         }
-        pieces.push(Piece { start_secs: piece.start_secs, end_secs: piece.end_secs, sum });
+        pieces.push(Piece {
+            start_secs: piece.start_secs,
+            end_secs: piece.end_secs,
+            sum,
+        });
     }
 
     DoseResponse { pieces }
@@ -258,7 +283,10 @@ pub struct Curve {
 
 impl Curve {
     pub fn new(volume_l: f64) -> Self {
-        Self { responses: Vec::new(), volume_l }
+        Self {
+            responses: Vec::new(),
+            volume_l,
+        }
     }
 
     pub fn add(&mut self, response: DoseResponse) {

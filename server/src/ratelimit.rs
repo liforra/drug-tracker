@@ -28,7 +28,10 @@ pub struct Quota {
 
 impl Quota {
     pub const fn new(capacity: f64, refill_per_sec: f64) -> Self {
-        Self { capacity, refill_per_sec }
+        Self {
+            capacity,
+            refill_per_sec,
+        }
     }
 }
 
@@ -116,7 +119,9 @@ impl RateLimiter {
             refill_per_sec: quota.refill_per_sec,
         });
 
-        let elapsed = now.saturating_duration_since(bucket.last_seen).as_secs_f64();
+        let elapsed = now
+            .saturating_duration_since(bucket.last_seen)
+            .as_secs_f64();
         bucket.tokens = (bucket.tokens + elapsed * quota.refill_per_sec).min(quota.capacity);
         bucket.last_seen = now;
 
@@ -130,7 +135,11 @@ impl RateLimiter {
             } else {
                 f64::INFINITY
             };
-            Err(Denied { retry_after: Duration::from_secs_f64(seconds.min(3600.0).max(1.0)) })
+            // Not `clamp`: that returns NaN for a NaN input and `from_secs_f64` panics on
+            // it, whereas `min`/`max` swallow the NaN.
+            #[allow(clippy::manual_clamp)]
+            let retry_after = Duration::from_secs_f64(seconds.min(3600.0).max(1.0));
+            Err(Denied { retry_after })
         }
     }
 
@@ -159,8 +168,10 @@ fn evict(buckets: &mut HashMap<String, Bucket>, now: Instant) {
     let target = MAX_BUCKETS * 3 / 4;
     let surplus = buckets.len().saturating_sub(target);
 
-    let mut ranked: Vec<(f64, String)> =
-        buckets.iter().map(|(k, b)| (b.fullness(now), k.clone())).collect();
+    let mut ranked: Vec<(f64, String)> = buckets
+        .iter()
+        .map(|(k, b)| (b.fullness(now), k.clone()))
+        .collect();
     // Fullest first; among equals, the least recently touched.
     ranked.sort_by(|a, b| b.0.total_cmp(&a.0));
     for (_, key) in ranked.into_iter().take(surplus) {
@@ -179,9 +190,15 @@ mod tests {
         let limiter = RateLimiter::new();
         let now = Instant::now();
         for i in 0..3 {
-            assert!(limiter.check_at("k", TEST, now).is_ok(), "request {i} should pass");
+            assert!(
+                limiter.check_at("k", TEST, now).is_ok(),
+                "request {i} should pass"
+            );
         }
-        assert!(limiter.check_at("k", TEST, now).is_err(), "the fourth exceeds the burst");
+        assert!(
+            limiter.check_at("k", TEST, now).is_err(),
+            "the fourth exceeds the burst"
+        );
     }
 
     #[test]
@@ -196,7 +213,10 @@ mod tests {
         // One token per second at this quota.
         let later = start + Duration::from_secs(1);
         assert!(limiter.check_at("k", TEST, later).is_ok());
-        assert!(limiter.check_at("k", TEST, later).is_err(), "only one token had refilled");
+        assert!(
+            limiter.check_at("k", TEST, later).is_err(),
+            "only one token had refilled"
+        );
     }
 
     #[test]
@@ -248,7 +268,11 @@ mod tests {
         for i in 0..(MAX_BUCKETS * 2) {
             let _ = limiter.check_at(&format!("key-{i}"), TEST, now);
         }
-        assert!(limiter.len() <= MAX_BUCKETS, "map grew to {} entries", limiter.len());
+        assert!(
+            limiter.len() <= MAX_BUCKETS,
+            "map grew to {} entries",
+            limiter.len()
+        );
     }
 
     #[test]

@@ -50,13 +50,17 @@ pub fn build_at(state: &State, now: DateTime<Utc>) -> Levels {
     let mut metabolite = Curve::new(subject.volume_l(cotinine_params.vd_l_per_kg));
 
     for session in state.sessions.values() {
-        let Some(product) = state.product(&session.product_id) else { continue };
+        let Some(product) = state.product(&session.product_id) else {
+            continue;
+        };
         if product.substance_id != nicotine.id {
             // Other substances get their own curves once they exist; silently folding
             // them into the nicotine one would be worse than leaving them out.
             continue;
         }
-        let Some(route) = nicotine.route(&product.route_id) else { continue };
+        let Some(route) = nicotine.route(&product.route_id) else {
+            continue;
+        };
 
         // How long the pouch goes on giving. A property of the pouch, not of how long
         // you happen to keep it in. Brands differ, so the product may state its own.
@@ -113,12 +117,21 @@ pub fn build_at(state: &State, now: DateTime<Utc>) -> Levels {
             };
 
             let response = dose_response(&nicotine, route, &subject, dose);
-            metabolite.add(metabolite_response(&response, &nicotine, cotinine_params, &subject));
+            metabolite.add(metabolite_response(
+                &response,
+                &nicotine,
+                cotinine_params,
+                &subject,
+            ));
             parent.add(response);
         }
     }
 
-    Levels { nicotine: parent, cotinine: metabolite, subject }
+    Levels {
+        nicotine: parent,
+        cotinine: metabolite,
+        subject,
+    }
 }
 
 impl Levels {
@@ -168,19 +181,16 @@ impl Levels {
 ///
 /// Resting does not consume this budget, which is the honest model: what limits a pouch
 /// is extraction by saliva, and on a desk there is nothing extracting it.
-pub fn remaining_release(
-    state: &State,
-    session: &Session,
-    now: DateTime<Utc>,
-) -> Option<Duration> {
+pub fn remaining_release(state: &State, session: &Session, now: DateTime<Utc>) -> Option<Duration> {
     let product = state.product(&session.product_id)?;
     let nicotine = substances::nicotine();
     if product.substance_id != nicotine.id {
         return None;
     }
     let route = nicotine.route(&product.route_id)?;
-    let release_secs =
-        product.default_duration_secs.or(route.default_duration_secs)? as i64;
+    let release_secs = product
+        .default_duration_secs
+        .or(route.default_duration_secs)? as i64;
 
     let used = session.contact_duration(now).num_seconds();
     Some(Duration::seconds((release_secs - used).max(0)))
@@ -225,7 +235,11 @@ fn start_of_day() -> DateTime<Utc> {
 /// Sessions that started today, in the local timezone.
 pub fn today_count(state: &State) -> usize {
     let since = start_of_day();
-    state.sessions.values().filter(|s| s.started_at >= since).count()
+    state
+        .sessions
+        .values()
+        .filter(|s| s.started_at >= since)
+        .count()
 }
 
 /// Total nominal milligrams consumed today.

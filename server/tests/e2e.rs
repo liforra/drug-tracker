@@ -17,7 +17,11 @@ use tracker_server::{api, db, enroll, tunnel};
 /// Boot a server on an ephemeral port and return its base URL and pinned public key.
 async fn spawn_server() -> (String, [u8; 32], Arc<Mutex<rusqlite::Connection>>) {
     let conn = db::open_in_memory().unwrap();
-    conn.execute("INSERT INTO accounts (id, created_at) VALUES ('primary', 0)", []).unwrap();
+    conn.execute(
+        "INSERT INTO accounts (id, created_at) VALUES ('primary', 0)",
+        [],
+    )
+    .unwrap();
     let server_pub = *tunnel::load_or_create(&conn).unwrap().public.as_bytes();
 
     let db = Arc::new(Mutex::new(conn));
@@ -45,10 +49,18 @@ struct Device {
 }
 
 /// Enrol a device: claim a code, authenticate, and open an empty local store.
-fn enrol(base_url: &str, server_pub: [u8; 32], code: &str, name: &str, audit_pub: Option<&[u8]>) -> Device {
+fn enrol(
+    base_url: &str,
+    server_pub: [u8; 32],
+    code: &str,
+    name: &str,
+    audit_pub: Option<&[u8]>,
+) -> Device {
     let identity = DeviceIdentity::generate().unwrap();
-    let client =
-        SyncClient::new(ServerConfig { base_url: base_url.to_string(), server_pub });
+    let client = SyncClient::new(ServerConfig {
+        base_url: base_url.to_string(),
+        server_pub,
+    });
 
     let claimed = client
         .claim_invite(
@@ -64,7 +76,12 @@ fn enrol(base_url: &str, server_pub: [u8; 32], code: &str, name: &str, audit_pub
     client.authenticate(&device_id, &identity.ed25519).unwrap();
 
     let tracker = Tracker::open(Store::open_in_memory().unwrap(), Vec::new(), &device_id).unwrap();
-    Device { tracker, client, id: device_id, identity }
+    Device {
+        tracker,
+        client,
+        id: device_id,
+        identity,
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -78,13 +95,24 @@ async fn two_devices_share_one_log_through_the_encrypted_tunnel() {
     let code = invite(&db);
     let mut phone = tokio::task::spawn_blocking({
         let base_url = base_url.clone();
-        move || enrol(&base_url, server_pub, &code, "phone", Some(audit_pub.as_bytes()))
+        move || {
+            enrol(
+                &base_url,
+                server_pub,
+                &code,
+                "phone",
+                Some(audit_pub.as_bytes()),
+            )
+        }
     })
     .await
     .unwrap();
 
     // --- second device, invited by the first ---------------------------------
-    let laptop_code = phone.client.create_invite().unwrap()["code"].as_str().unwrap().to_string();
+    let laptop_code = phone.client.create_invite().unwrap()["code"]
+        .as_str()
+        .unwrap()
+        .to_string();
     let mut laptop = tokio::task::spawn_blocking({
         let base_url = base_url.clone();
         move || enrol(&base_url, server_pub, &laptop_code, "laptop", None)
@@ -99,15 +127,25 @@ async fn two_devices_share_one_log_through_the_encrypted_tunnel() {
         .publish_epoch(
             1,
             &[
-                (phone.id.clone(), dek.wrap_to(&phone.identity.x25519_public()).unwrap()),
-                (laptop.id.clone(), dek.wrap_to(&laptop.identity.x25519_public()).unwrap()),
+                (
+                    phone.id.clone(),
+                    dek.wrap_to(&phone.identity.x25519_public()).unwrap(),
+                ),
+                (
+                    laptop.id.clone(),
+                    dek.wrap_to(&laptop.identity.x25519_public()).unwrap(),
+                ),
             ],
         )
         .unwrap();
 
     for device in [&mut phone, &mut laptop] {
         let wraps = device.client.deks(0).unwrap();
-        assert_eq!(wraps.len(), 1, "each device must receive its own sealed copy");
+        assert_eq!(
+            wraps.len(),
+            1,
+            "each device must receive its own sealed copy"
+        );
         let wrapped = base64_decode(&wraps[0].wrapped_dek);
         let key = Dek::unwrap_with(&device.identity.x25519, &wrapped).unwrap();
         device.tracker.add_dek(wraps[0].epoch, key).unwrap();
@@ -116,7 +154,15 @@ async fn two_devices_share_one_log_through_the_encrypted_tunnel() {
     // --- the phone defines a variety and starts a session --------------------
     let product = phone
         .tracker
-        .define_product("CUBA PEACH", "nicotine", "buccal_pouch", 10.4, Some(1800.0), Some("#F2994A".into()), None)
+        .define_product(
+            "CUBA PEACH",
+            "nicotine",
+            "buccal_pouch",
+            10.4,
+            Some(1800.0),
+            Some("#F2994A".into()),
+            None,
+        )
         .unwrap();
     let session = phone.tracker.start_session(&product).unwrap();
 
@@ -151,11 +197,18 @@ async fn two_devices_share_one_log_through_the_encrypted_tunnel() {
     // --- the server learned nothing ------------------------------------------
     let conn = db.lock().unwrap();
     let mut stmt = conn.prepare("SELECT ciphertext FROM events").unwrap();
-    let blobs: Vec<Vec<u8>> =
-        stmt.query_map([], |r| r.get(0)).unwrap().collect::<Result<_, _>>().unwrap();
+    let blobs: Vec<Vec<u8>> = stmt
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
     assert_eq!(blobs.len(), 3, "product, start, end");
     for blob in &blobs {
-        for needle in [b"CUBA".as_slice(), b"nicotine".as_slice(), b"session".as_slice()] {
+        for needle in [
+            b"CUBA".as_slice(),
+            b"nicotine".as_slice(),
+            b"session".as_slice(),
+        ] {
             assert!(
                 !blob.windows(needle.len()).any(|w| w == needle),
                 "the server stored something readable: {:?}",
@@ -177,7 +230,10 @@ async fn a_revoked_device_is_told_so_and_wipes_itself() {
     .await
     .unwrap();
 
-    let laptop_code = phone.client.create_invite().unwrap()["code"].as_str().unwrap().to_string();
+    let laptop_code = phone.client.create_invite().unwrap()["code"]
+        .as_str()
+        .unwrap()
+        .to_string();
     let mut laptop = tokio::task::spawn_blocking({
         let base_url = base_url.clone();
         move || enrol(&base_url, server_pub, &laptop_code, "laptop", None)
@@ -191,28 +247,47 @@ async fn a_revoked_device_is_told_so_and_wipes_itself() {
         .publish_epoch(
             1,
             &[
-                (phone.id.clone(), dek.wrap_to(&phone.identity.x25519_public()).unwrap()),
-                (laptop.id.clone(), dek.wrap_to(&laptop.identity.x25519_public()).unwrap()),
+                (
+                    phone.id.clone(),
+                    dek.wrap_to(&phone.identity.x25519_public()).unwrap(),
+                ),
+                (
+                    laptop.id.clone(),
+                    dek.wrap_to(&laptop.identity.x25519_public()).unwrap(),
+                ),
             ],
         )
         .unwrap();
     for device in [&mut phone, &mut laptop] {
         let wraps = device.client.deks(0).unwrap();
-        let key = Dek::unwrap_with(&device.identity.x25519, &base64_decode(&wraps[0].wrapped_dek))
-            .unwrap();
+        let key = Dek::unwrap_with(
+            &device.identity.x25519,
+            &base64_decode(&wraps[0].wrapped_dek),
+        )
+        .unwrap();
         device.tracker.add_dek(wraps[0].epoch, key).unwrap();
     }
 
     let product = phone
         .tracker
-        .define_product("CUBA PEACH", "nicotine", "buccal_pouch", 10.4, None, None, None)
+        .define_product(
+            "CUBA PEACH",
+            "nicotine",
+            "buccal_pouch",
+            10.4,
+            None,
+            None,
+            None,
+        )
         .unwrap();
-    phone.tracker.record(Event::SessionStarted {
-        session_id: "s1".into(),
-        product_id: product,
-        started_at: chrono::Utc::now(),
-    })
-    .unwrap();
+    phone
+        .tracker
+        .record(Event::SessionStarted {
+            session_id: "s1".into(),
+            product_id: product,
+            started_at: chrono::Utc::now(),
+        })
+        .unwrap();
     phone.tracker.sync(&phone.client).unwrap();
 
     // The laptop is lost; the phone revokes it.
@@ -224,7 +299,10 @@ async fn a_revoked_device_is_told_so_and_wipes_itself() {
         &error,
         tracker_core::tracker::TrackerError::Sync(e) if e.is_revoked()
     );
-    assert!(is_revoked, "the client must be able to tell revocation apart: {error}");
+    assert!(
+        is_revoked,
+        "the client must be able to tell revocation apart: {error}"
+    );
 
     // And acts on it rather than waiting for the lease to lapse.
     laptop.tracker.lock_and_wipe().unwrap();

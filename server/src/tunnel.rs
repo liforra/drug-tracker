@@ -61,9 +61,11 @@ impl Identity {
 /// Load the server identity, creating it on first call.
 pub fn load_or_create(conn: &Connection) -> Result<Identity> {
     let existing: Option<(Vec<u8>, Vec<u8>)> = conn
-        .query_row("SELECT secret_key, public_key FROM server_identity WHERE id = 1", [], |row| {
-            Ok((row.get(0)?, row.get(1)?))
-        })
+        .query_row(
+            "SELECT secret_key, public_key FROM server_identity WHERE id = 1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
         .optional()?;
 
     if let Some((secret, public)) = existing {
@@ -82,9 +84,11 @@ pub fn load_or_create(conn: &Connection) -> Result<Identity> {
 
 pub fn load(conn: &Connection) -> Result<Identity> {
     let row: Option<(Vec<u8>, Vec<u8>)> = conn
-        .query_row("SELECT secret_key, public_key FROM server_identity WHERE id = 1", [], |row| {
-            Ok((row.get(0)?, row.get(1)?))
-        })
+        .query_row(
+            "SELECT secret_key, public_key FROM server_identity WHERE id = 1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
         .optional()?;
     let (secret, public) = row.ok_or(TunnelError::NoIdentity)?;
     Ok(Identity {
@@ -114,7 +118,11 @@ impl Envelope {
         })
     }
 
-    pub fn encode(client_ephemeral_pub: &[u8; KEY_LEN], nonce: &[u8; NONCE_LEN], ciphertext: &[u8]) -> Vec<u8> {
+    pub fn encode(
+        client_ephemeral_pub: &[u8; KEY_LEN],
+        nonce: &[u8; NONCE_LEN],
+        ciphertext: &[u8],
+    ) -> Vec<u8> {
         let mut out = Vec::with_capacity(KEY_LEN + NONCE_LEN + ciphertext.len());
         out.extend_from_slice(client_ephemeral_pub);
         out.extend_from_slice(nonce);
@@ -187,7 +195,12 @@ pub mod client {
             return Err(TunnelError::Malformed);
         }
         let (nonce, ciphertext) = response.split_at(NONCE_LEN);
-        Ok(crypto::aead_open(reply_key, &crypto::to_nonce(nonce)?, b"response", ciphertext)?)
+        Ok(crypto::aead_open(
+            reply_key,
+            &crypto::to_nonce(nonce)?,
+            b"response",
+            ciphertext,
+        )?)
     }
 }
 
@@ -275,7 +288,10 @@ mod tests {
     #[test]
     fn truncated_envelopes_are_rejected() {
         for len in [0, 1, KEY_LEN, KEY_LEN + NONCE_LEN - 1] {
-            assert!(matches!(Envelope::parse(&vec![0u8; len]), Err(TunnelError::Malformed)));
+            assert!(matches!(
+                Envelope::parse(&vec![0u8; len]),
+                Err(TunnelError::Malformed)
+            ));
         }
     }
 }

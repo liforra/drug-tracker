@@ -9,8 +9,8 @@ use std::time::{Duration as StdDuration, Instant};
 
 use chrono::{DateTime, Duration, Utc};
 use eframe::egui::{
-    self, Align, Color32, CornerRadius, FontId, Layout, Pos2, RichText, Sense, Stroke,
-    StrokeKind, Vec2,
+    self, Align, Color32, CornerRadius, FontId, Layout, Pos2, RichText, Sense, Stroke, StrokeKind,
+    Vec2,
 };
 
 use crate::{
@@ -212,7 +212,10 @@ impl StatsApp {
     /// an error: the record is safely in the local log and goes out with the next sync.
     fn act(&mut self, change: impl FnOnce(&mut Session) -> Result<String, String>) {
         let Some(session) = self.session.as_mut() else {
-            self.notice = Notice { text: "Keine Verbindung zum Server".into(), is_error: true };
+            self.notice = Notice {
+                text: "Keine Verbindung zum Server".into(),
+                is_error: true,
+            };
             return;
         };
         match change(session) {
@@ -221,9 +224,17 @@ impl StatsApp {
                     Ok(_) => message,
                     Err(e) => format!("{message} (Sync fehlgeschlagen: {e})"),
                 };
-                self.notice = Notice { text: message, is_error: false };
+                self.notice = Notice {
+                    text: message,
+                    is_error: false,
+                };
             }
-            Err(message) => self.notice = Notice { text: message, is_error: true },
+            Err(message) => {
+                self.notice = Notice {
+                    text: message,
+                    is_error: true,
+                }
+            }
         }
         self.rebuild();
     }
@@ -236,8 +247,15 @@ impl eframe::App for StatsApp {
         }
         // The session clock ticks every second while something is in; otherwise the
         // refresh interval is all the redraws needed.
-        let ticking = self.session.as_ref().is_some_and(|s| !s.tracker.state().open_sessions().is_empty());
-        ctx.request_repaint_after(if ticking { StdDuration::from_secs(1) } else { REFRESH });
+        let ticking = self
+            .session
+            .as_ref()
+            .is_some_and(|s| !s.tracker.state().open_sessions().is_empty());
+        ctx.request_repaint_after(if ticking {
+            StdDuration::from_secs(1)
+        } else {
+            REFRESH
+        });
 
         egui::CentralPanel::default()
             .frame(
@@ -247,10 +265,12 @@ impl eframe::App for StatsApp {
                     .inner_margin(egui::Margin::same(16)),
             )
             .show(ctx, |ui| {
-                egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-                    ui.set_width(ui.available_width());
-                    self.content(ui, ctx);
-                });
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        self.content(ui, ctx);
+                    });
             });
 
         self.show_tuning(ctx);
@@ -277,15 +297,43 @@ impl StatsApp {
         let gap = ui.spacing().item_spacing.x;
         ui.horizontal(|ui| {
             let width = (ui.available_width() - 3.0 * gap) / 4.0;
-            tile(ui, width, "NIKOTIN", &format!("{:.1}", view.nicotine), &format!("{:+.2}/min", view.rate), NICOTINE);
-            tile(ui, width, "COTININ", &format!("{:.0}", view.cotinine), "ng/mL", COTININE);
-            tile(ui, width, "HEUTE", &view.today_count.to_string(), &format!("{:.1} mg", view.today_mg), TEXT);
+            tile(
+                ui,
+                width,
+                "NIKOTIN",
+                &format!("{:.1}", view.nicotine),
+                &format!("{:+.2}/min", view.rate),
+                NICOTINE,
+            );
+            tile(
+                ui,
+                width,
+                "COTININ",
+                &format!("{:.0}", view.cotinine),
+                "ng/mL",
+                COTININE,
+            );
+            tile(
+                ui,
+                width,
+                "HEUTE",
+                &view.today_count.to_string(),
+                &format!("{:.1} mg", view.today_mg),
+                TEXT,
+            );
             tile(
                 ui,
                 width,
                 "TOLERANZ",
-                &view.tolerance.map(|t| format!("{t:.0}")).unwrap_or_else(|| "–".into()),
-                if view.tolerance.is_some() { "% vom Hoch" } else { "zu wenig Verlauf" },
+                &view
+                    .tolerance
+                    .map(|t| format!("{t:.0}"))
+                    .unwrap_or_else(|| "–".into()),
+                if view.tolerance.is_some() {
+                    "% vom Hoch"
+                } else {
+                    "zu wenig Verlauf"
+                },
                 TEXT_DIM,
             );
         });
@@ -337,7 +385,12 @@ impl StatsApp {
                 .color(TEXT_BODY),
             );
             ui.add_space(8.0);
-            field(ui, "Server-Adresse", &mut self.enroll.url, "https://tracker.example.de");
+            field(
+                ui,
+                "Server-Adresse",
+                &mut self.enroll.url,
+                "https://tracker.example.de",
+            );
             field(ui, "Server-Schlüssel", &mut self.enroll.key, "base64");
             field(ui, "Einladungscode", &mut self.enroll.code, "");
             field(ui, "Gerätename", &mut self.enroll.name, "");
@@ -362,7 +415,12 @@ impl StatsApp {
                             is_error: false,
                         };
                     }
-                    Err(e) => self.notice = Notice { text: e.to_string(), is_error: true },
+                    Err(e) => {
+                        self.notice = Notice {
+                            text: e.to_string(),
+                            is_error: true,
+                        }
+                    }
                 }
             }
         });
@@ -371,10 +429,18 @@ impl StatsApp {
 
     fn header(&mut self, ui: &mut egui::Ui, view: &View) {
         ui.horizontal(|ui| {
-            ui.label(RichText::new("SNUS TRACKER").family(theme::bold()).size(18.0).color(ACCENT_STRONG));
+            ui.label(
+                RichText::new("SNUS TRACKER")
+                    .family(theme::bold())
+                    .size(18.0)
+                    .color(ACCENT_STRONG),
+            );
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 if ui
-                    .add_enabled(view.online, egui::Button::new(RichText::new("Sync").size(12.0)))
+                    .add_enabled(
+                        view.online,
+                        egui::Button::new(RichText::new("Sync").size(12.0)),
+                    )
                     .on_hover_text("Jetzt mit dem Server abgleichen")
                     .clicked()
                 {
@@ -384,15 +450,30 @@ impl StatsApp {
                         Err(e) => Err(format!("Sync fehlgeschlagen: {e}")),
                     });
                 }
-                let settings_label = if self.show_settings { "Einstellungen [-]" } else { "Einstellungen [+]" };
-                if ui.add(egui::Button::new(RichText::new(settings_label).size(12.0))).clicked() {
+                let settings_label = if self.show_settings {
+                    "Einstellungen [-]"
+                } else {
+                    "Einstellungen [+]"
+                };
+                if ui
+                    .add(egui::Button::new(RichText::new(settings_label).size(12.0)))
+                    .clicked()
+                {
                     self.show_settings = !self.show_settings;
                 }
-                let (label, colour) = if view.online { ("verbunden", GOOD) } else { ("offline", TEXT_DIM) };
+                let (label, colour) = if view.online {
+                    ("verbunden", GOOD)
+                } else {
+                    ("offline", TEXT_DIM)
+                };
                 ui.label(RichText::new(label).size(12.0).color(colour));
                 dot(ui, colour);
                 if view.pending > 0 {
-                    ui.label(RichText::new(format!("{} offen", view.pending)).size(12.0).color(TEXT_DIM));
+                    ui.label(
+                        RichText::new(format!("{} offen", view.pending))
+                            .size(12.0)
+                            .color(TEXT_DIM),
+                    );
                 }
             });
         });
@@ -403,7 +484,11 @@ impl StatsApp {
         if self.notice.text.is_empty() {
             return;
         }
-        let colour = if self.notice.is_error { BAD } else { ACCENT_STRONG };
+        let colour = if self.notice.is_error {
+            BAD
+        } else {
+            ACCENT_STRONG
+        };
         ui.label(RichText::new(&self.notice.text).size(12.0).color(colour));
         ui.add_space(6.0);
     }
@@ -419,7 +504,12 @@ impl StatsApp {
         card(ui, ACCENT, ACCENT_WASH, |ui| {
             ui.horizontal(|ui| {
                 dot(ui, ACCENT);
-                ui.label(RichText::new(&open.name).family(theme::bold()).size(16.0).color(TEXT));
+                ui.label(
+                    RichText::new(&open.name)
+                        .family(theme::bold())
+                        .size(16.0)
+                        .color(TEXT),
+                );
             });
             ui.label(
                 RichText::new(format_elapsed(open.started_at))
@@ -428,9 +518,13 @@ impl StatsApp {
                     .color(ACCENT_STRONG),
             );
             ui.label(
-                RichText::new(if open.paused { "ruht — gibt gerade nichts ab" } else { "seit dem Einlegen" })
-                    .size(12.0)
-                    .color(TEXT_DIM),
+                RichText::new(if open.paused {
+                    "ruht — gibt gerade nichts ab"
+                } else {
+                    "seit dem Einlegen"
+                })
+                .size(12.0)
+                .color(TEXT_DIM),
             );
             // What the pouch still has in it. A spent pouch in the lip does nothing, and
             // there is no way to tell by feel.
@@ -438,13 +532,23 @@ impl StatsApp {
                 let (text, colour) = if left.num_seconds() == 0 {
                     ("leer — gibt nichts mehr ab".to_string(), TEXT_DIM)
                 } else {
-                    (format!("noch {} Freisetzung", format_duration(left)), ACCENT)
+                    (
+                        format!("noch {} Freisetzung", format_duration(left)),
+                        ACCENT,
+                    )
                 };
                 ui.label(RichText::new(text).size(12.0).color(colour));
             }
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                if ui.add(egui::Button::new(if open.paused { "Wieder rein" } else { "Ruhen" })).clicked() {
+                if ui
+                    .add(egui::Button::new(if open.paused {
+                        "Wieder rein"
+                    } else {
+                        "Ruhen"
+                    }))
+                    .clicked()
+                {
                     action = Some(Action::Rest);
                 }
                 if ui.add(primary("Beenden")).clicked() {
@@ -454,7 +558,9 @@ impl StatsApp {
                 // end. Ending records a consumption; discarding says it never happened.
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if ui
-                        .add(egui::Button::new(RichText::new("Verwerfen").size(12.0).color(TEXT_DIM)))
+                        .add(egui::Button::new(
+                            RichText::new("Verwerfen").size(12.0).color(TEXT_DIM),
+                        ))
                         .on_hover_text("Zählt nicht als Konsum")
                         .clicked()
                     {
@@ -469,13 +575,26 @@ impl StatsApp {
         let paused = open.paused;
         match action {
             Some(Action::Rest) => self.act(move |s| {
-                let result = if paused { s.tracker.resume_session(&id) } else { s.tracker.pause_session(&id) };
+                let result = if paused {
+                    s.tracker.resume_session(&id)
+                } else {
+                    s.tracker.pause_session(&id)
+                };
                 result
-                    .map(|_| if paused { format!("{name} wieder drin") } else { format!("{name} ruht") })
+                    .map(|_| {
+                        if paused {
+                            format!("{name} wieder drin")
+                        } else {
+                            format!("{name} ruht")
+                        }
+                    })
                     .map_err(|e| e.to_string())
             }),
             Some(Action::End) => self.act(move |s| {
-                s.tracker.end_session(&id).map(|_| format!("{name} beendet")).map_err(|e| e.to_string())
+                s.tracker
+                    .end_session(&id)
+                    .map(|_| format!("{name} beendet"))
+                    .map_err(|e| e.to_string())
             }),
             Some(Action::Discard) => self.act(move |s| {
                 s.tracker
@@ -505,9 +624,11 @@ impl StatsApp {
 
             if view.products.is_empty() {
                 ui.label(
-                    RichText::new("Noch keine Sorten. Unten anlegen — sie erscheinen auf allen Geräten.")
-                        .size(12.0)
-                        .color(TEXT_BODY),
+                    RichText::new(
+                        "Noch keine Sorten. Unten anlegen — sie erscheinen auf allen Geräten.",
+                    )
+                    .size(12.0)
+                    .color(TEXT_BODY),
                 );
             }
 
@@ -546,8 +667,16 @@ impl StatsApp {
             ui.separator();
             ui.label(RichText::new("Sorte anlegen").size(12.0).color(TEXT_DIM));
             ui.horizontal(|ui| {
-                ui.add(egui::TextEdit::singleline(&mut self.new_name).hint_text("Name").desired_width(220.0));
-                ui.add(egui::TextEdit::singleline(&mut self.new_mg).hint_text("mg").desired_width(70.0));
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.new_name)
+                        .hint_text("Name")
+                        .desired_width(220.0),
+                );
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.new_mg)
+                        .hint_text("mg")
+                        .desired_width(70.0),
+                );
                 submitted = ui.add(primary("Anlegen")).clicked();
             });
         });
@@ -575,7 +704,9 @@ impl StatsApp {
             self.act(move |s| {
                 s.tracker
                     .retire_product(&id)
-                    .map(|_| format!("{name} ausgeblendet. Bisherige Sessions bleiben in der Rechnung."))
+                    .map(|_| {
+                        format!("{name} ausgeblendet. Bisherige Sessions bleiben in der Rechnung.")
+                    })
                     .map_err(|e| e.to_string())
             });
         }
@@ -634,16 +765,26 @@ impl StatsApp {
                 .color(TEXT_DIM),
             );
             ui.horizontal(|ui| {
-                invite = ui.add_enabled(view.online, egui::Button::new("Gerät einladen")).clicked();
-                approve = ui.add_enabled(view.online, egui::Button::new("Neues Gerät freischalten")).clicked();
+                invite = ui
+                    .add_enabled(view.online, egui::Button::new("Gerät einladen"))
+                    .clicked();
+                approve = ui
+                    .add_enabled(view.online, egui::Button::new("Neues Gerät freischalten"))
+                    .clicked();
             });
         });
 
         if save_mass {
             let text = self.body_mass.clone();
             self.act(move |s| {
-                let kg: f64 = text.trim().replace(',', ".").parse().map_err(|_| "Gewicht ist keine Zahl".to_string())?;
-                s.tracker.update_subject(Some(kg), None).map_err(|e| e.to_string())?;
+                let kg: f64 = text
+                    .trim()
+                    .replace(',', ".")
+                    .parse()
+                    .map_err(|_| "Gewicht ist keine Zahl".to_string())?;
+                s.tracker
+                    .update_subject(Some(kg), None)
+                    .map_err(|e| e.to_string())?;
                 Ok(format!("Gewicht {kg:.0} kg"))
             });
             self.body_mass.clear();
@@ -662,17 +803,27 @@ impl StatsApp {
                         self.invite = Some(invite);
                         self.notice = Notice::default();
                     }
-                    Err(error) => self.notice = Notice { text: error, is_error: true },
+                    Err(error) => {
+                        self.notice = Notice {
+                            text: error,
+                            is_error: true,
+                        }
+                    }
                 },
                 None => {
-                    self.notice = Notice { text: "Keine Verbindung zum Server".into(), is_error: true }
+                    self.notice = Notice {
+                        text: "Keine Verbindung zum Server".into(),
+                        is_error: true,
+                    }
                 }
             }
         }
     }
 
     fn show_tuning(&mut self, ctx: &egui::Context) {
-        let Some(tuning) = &mut self.tuning else { return };
+        let Some(tuning) = &mut self.tuning else {
+            return;
+        };
         let mut open = true;
         let mut save = false;
 
@@ -700,7 +851,11 @@ impl StatsApp {
             });
 
         if save {
-            let (id, name, minutes) = (tuning.product_id.clone(), tuning.name.clone(), tuning.minutes.clone());
+            let (id, name, minutes) = (
+                tuning.product_id.clone(),
+                tuning.name.clone(),
+                tuning.minutes.clone(),
+            );
             self.tuning = None;
             self.act(move |s| {
                 let minutes: f64 = minutes
@@ -737,7 +892,10 @@ impl StatsApp {
             .show(ctx, |ui| {
                 ui.set_max_width(420.0);
                 ui.vertical_centered(|ui| {
-                    ui.image(egui::load::SizedTexture::new(invite.texture.id(), Vec2::splat(260.0)));
+                    ui.image(egui::load::SizedTexture::new(
+                        invite.texture.id(),
+                        Vec2::splat(260.0),
+                    ));
                 });
                 ui.add_space(8.0);
                 invite_field(ui, "Server-Adresse", &invite.url);
@@ -783,7 +941,11 @@ fn mint_invite(session: &Session, ctx: &egui::Context) -> Result<Invite, String>
     let expires_at = response["expires_at"].as_i64().unwrap_or_default();
     let minutes = ((expires_at - Utc::now().timestamp()) / 60).max(0);
 
-    let uri = qr::enrollment_uri(&session.config.server_url, &session.config.server_pub, &code);
+    let uri = qr::enrollment_uri(
+        &session.config.server_url,
+        &session.config.server_pub,
+        &code,
+    );
     let matrix = qr::Qr::encode(&uri).map_err(|e| e.to_string())?;
     let (w, h, rgba) = matrix.to_rgba(6, 4);
 
@@ -813,13 +975,25 @@ fn add_product(session: &mut Session, name: &str, mg: &str) -> Result<String, St
         return Err("Name fehlt".into());
     }
     // Accept a comma: "10,4" is how the number is written on the tin here.
-    let nominal_mg: f64 = mg.trim().replace(',', ".").parse().map_err(|_| "mg ist keine Zahl".to_string())?;
+    let nominal_mg: f64 = mg
+        .trim()
+        .replace(',', ".")
+        .parse()
+        .map_err(|_| "mg ist keine Zahl".to_string())?;
     if nominal_mg <= 0.0 {
         return Err("mg muss größer als 0 sein".into());
     }
     session
         .tracker
-        .define_product(name, "nicotine", "buccal_pouch", nominal_mg, None, None, None)
+        .define_product(
+            name,
+            "nicotine",
+            "buccal_pouch",
+            nominal_mg,
+            None,
+            None,
+            None,
+        )
         .map(|_| format!("Sorte '{name}' angelegt"))
         .map_err(|e| format!("Fehlgeschlagen: {e}"))
 }
@@ -833,7 +1007,12 @@ fn dot(ui: &mut egui::Ui, colour: Color32) {
 }
 
 fn heading(ui: &mut egui::Ui, text: &str) {
-    ui.label(RichText::new(text).family(theme::bold()).size(13.0).color(ACCENT));
+    ui.label(
+        RichText::new(text)
+            .family(theme::bold())
+            .size(13.0)
+            .color(ACCENT),
+    );
 }
 
 fn primary(text: &str) -> egui::Button<'static> {
@@ -844,7 +1023,11 @@ fn primary(text: &str) -> egui::Button<'static> {
 
 fn field(ui: &mut egui::Ui, label: &str, value: &mut String, hint: &str) {
     ui.label(RichText::new(label).size(11.0).color(TEXT_DIM));
-    ui.add(egui::TextEdit::singleline(value).hint_text(hint).desired_width(f32::INFINITY));
+    ui.add(
+        egui::TextEdit::singleline(value)
+            .hint_text(hint)
+            .desired_width(f32::INFINITY),
+    );
 }
 
 fn legend(ui: &mut egui::Ui, colour: Color32, label: &str) {
@@ -874,16 +1057,30 @@ fn tile(ui: &mut egui::Ui, width: f32, label: &str, value: &str, unit: &str, col
             ui.set_width(width - 22.0);
             ui.vertical(|ui| {
                 ui.label(RichText::new(label).size(10.0).color(TEXT_DIM));
-                ui.label(RichText::new(value).family(theme::bold()).size(22.0).color(colour));
+                ui.label(
+                    RichText::new(value)
+                        .family(theme::bold())
+                        .size(22.0)
+                        .color(colour),
+                );
                 ui.label(RichText::new(unit).size(10.0).color(TEXT_DIM));
             });
         });
 }
 
 /// One variety. The whole tile is the button: a tracker that takes aim is one with gaps.
-fn product_tile(ui: &mut egui::Ui, width: f32, product: &ProductView, enabled: bool) -> egui::Response {
+fn product_tile(
+    ui: &mut egui::Ui,
+    width: f32,
+    product: &ProductView,
+    enabled: bool,
+) -> egui::Response {
     let height = 64.0;
-    let sense = if enabled { Sense::click() } else { Sense::hover() };
+    let sense = if enabled {
+        Sense::click()
+    } else {
+        Sense::hover()
+    };
     let (rect, response) = ui.allocate_exact_size(Vec2::new(width, height), sense);
 
     let hovered = enabled && response.hovered();
@@ -891,7 +1088,11 @@ fn product_tile(ui: &mut egui::Ui, width: f32, product: &ProductView, enabled: b
     let fade = |c: Color32| if enabled { c } else { c.gamma_multiply(0.4) };
 
     let painter = ui.painter();
-    painter.rect_filled(rect, CornerRadius::ZERO, if hovered { HOVER } else { PANEL });
+    painter.rect_filled(
+        rect,
+        CornerRadius::ZERO,
+        if hovered { HOVER } else { PANEL },
+    );
     painter.rect_stroke(
         rect,
         CornerRadius::ZERO,
@@ -929,7 +1130,8 @@ fn product_tile(ui: &mut egui::Ui, width: f32, product: &ProductView, enabled: b
 /// that only survives if each gets its own range.
 fn draw_chart(ui: &mut egui::Ui, levels: &Levels, now: DateTime<Utc>) {
     let height = 190.0;
-    let (response, painter) = ui.allocate_painter(Vec2::new(ui.available_width(), height), Sense::hover());
+    let (response, painter) =
+        ui.allocate_painter(Vec2::new(ui.available_width(), height), Sense::hover());
     let rect = response.rect;
 
     painter.rect_filled(rect, CornerRadius::ZERO, BG);
@@ -994,20 +1196,36 @@ fn draw_chart(ui: &mut egui::Ui, levels: &Levels, now: DateTime<Utc>) {
     for pair in nicotine_points.windows(2) {
         let (a, b) = (pair[0], pair[1]);
         painter.add(egui::Shape::convex_polygon(
-            vec![a, b, Pos2::new(b.x, plot.bottom()), Pos2::new(a.x, plot.bottom())],
+            vec![
+                a,
+                b,
+                Pos2::new(b.x, plot.bottom()),
+                Pos2::new(a.x, plot.bottom()),
+            ],
             wash,
             Stroke::NONE,
         ));
     }
 
-    painter.add(egui::Shape::line(cotinine_points, Stroke::new(1.6_f32, COTININE)));
-    painter.add(egui::Shape::line(nicotine_points.clone(), Stroke::new(2.0_f32, NICOTINE)));
+    painter.add(egui::Shape::line(
+        cotinine_points,
+        Stroke::new(1.6_f32, COTININE),
+    ));
+    painter.add(egui::Shape::line(
+        nicotine_points.clone(),
+        Stroke::new(2.0_f32, NICOTINE),
+    ));
 
     if let Some(last) = nicotine_points.last() {
         painter.circle_filled(*last, 3.5, NICOTINE);
     }
 
-    painter.rect_stroke(rect, CornerRadius::ZERO, Stroke::new(1.0_f32, DIVIDER), StrokeKind::Inside);
+    painter.rect_stroke(
+        rect,
+        CornerRadius::ZERO,
+        Stroke::new(1.0_f32, DIVIDER),
+        StrokeKind::Inside,
+    );
 }
 
 fn parse_hex(hex: &str) -> Option<Color32> {
@@ -1032,6 +1250,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             .with_app_id("snus-tracker"),
         ..Default::default()
     };
-    eframe::run_native("snus-tracker", options, Box::new(|cc| Ok(Box::new(StatsApp::new(cc)))))?;
+    eframe::run_native(
+        "snus-tracker",
+        options,
+        Box::new(|cc| Ok(Box::new(StatsApp::new(cc)))),
+    )?;
     Ok(())
 }

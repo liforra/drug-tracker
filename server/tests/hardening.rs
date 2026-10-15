@@ -28,8 +28,11 @@ struct TestDevice {
 
 fn build() -> (Router, Arc<Mutex<rusqlite::Connection>>) {
     let conn = db::open_in_memory().unwrap();
-    conn.execute("INSERT INTO accounts (id, created_at) VALUES ('primary', 0)", [])
-        .unwrap();
+    conn.execute(
+        "INSERT INTO accounts (id, created_at) VALUES ('primary', 0)",
+        [],
+    )
+    .unwrap();
     tunnel::load_or_create(&conn).unwrap();
     let db = Arc::new(Mutex::new(conn));
     (api::router(api::AppState::new(db.clone())), db)
@@ -105,17 +108,26 @@ async fn enrol(app: &Router, code: &str, name: &str, audit_pub: Option<&[u8]>) -
     assert_eq!(status, StatusCode::OK, "claim failed: {claimed}");
     let device_id = claimed["device_id"].as_str().unwrap().to_string();
 
-    let (_, challenge) =
-        call(app, post("/v1/auth/challenge", json!({ "device_id": device_id }))).await;
+    let (_, challenge) = call(
+        app,
+        post("/v1/auth/challenge", json!({ "device_id": device_id })),
+    )
+    .await;
     let nonce = challenge["nonce"].as_str().unwrap();
     let signature = BASE64_URL_SAFE_NO_PAD.encode(signing_key.sign(nonce.as_bytes()).to_bytes());
     let (_, verified) = call(
         app,
-        post("/v1/auth/verify", json!({ "nonce": nonce, "signature": signature })),
+        post(
+            "/v1/auth/verify",
+            json!({ "nonce": nonce, "signature": signature }),
+        ),
     )
     .await;
 
-    TestDevice { device_id, token: verified["token"].as_str().unwrap().to_string() }
+    TestDevice {
+        device_id,
+        token: verified["token"].as_str().unwrap().to_string(),
+    }
 }
 
 async fn bootstrap_code(db: &Arc<Mutex<rusqlite::Connection>>) -> String {
@@ -131,7 +143,11 @@ async fn rotation_after_revocation_cuts_the_device_out_of_future_epochs() {
     let code = bootstrap_code(&db).await;
     let phone = enrol(&app, &code, "phone", None).await;
 
-    let (_, invite) = call(&app, post_auth("/v1/enroll/invite", &phone.token, json!({}))).await;
+    let (_, invite) = call(
+        &app,
+        post_auth("/v1/enroll/invite", &phone.token, json!({})),
+    )
+    .await;
     let laptop = enrol(&app, invite["code"].as_str().unwrap(), "laptop", None).await;
 
     // Epoch 1 goes to both devices.
@@ -151,12 +167,20 @@ async fn rotation_after_revocation_cuts_the_device_out_of_future_epochs() {
     assert!(published["uncovered"].as_array().unwrap().is_empty());
 
     let (_, laptop_keys) = call(&app, get_auth("/v1/deks", &laptop.token)).await;
-    assert_eq!(laptop_keys.as_array().unwrap().len(), 1, "laptop holds epoch 1");
+    assert_eq!(
+        laptop_keys.as_array().unwrap().len(),
+        1,
+        "laptop holds epoch 1"
+    );
 
     // --- the laptop is lost, the phone revokes it -------------------------------
     call(
         &app,
-        post_auth(&format!("/v1/devices/{}/revoke", laptop.device_id), &phone.token, json!({})),
+        post_auth(
+            &format!("/v1/devices/{}/revoke", laptop.device_id),
+            &phone.token,
+            json!({}),
+        ),
     )
     .await;
 
@@ -173,7 +197,11 @@ async fn rotation_after_revocation_cuts_the_device_out_of_future_epochs() {
         ),
     )
     .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST, "must refuse to re-admit: {refused}");
+    assert_eq!(
+        status,
+        StatusCode::BAD_REQUEST,
+        "must refuse to re-admit: {refused}"
+    );
 
     // Sealing to the phone alone succeeds and becomes the current epoch.
     let (status, _) = call(
@@ -230,7 +258,11 @@ async fn a_device_can_collect_every_epoch_it_is_entitled_to() {
     assert_eq!(all.as_array().unwrap().len(), 3);
 
     let (_, recent) = call(&app, get_auth("/v1/deks?since_epoch=3", &phone.token)).await;
-    assert_eq!(recent.as_array().unwrap().len(), 1, "a caught-up device skips what it has");
+    assert_eq!(
+        recent.as_array().unwrap().len(),
+        1,
+        "a caught-up device skips what it has"
+    );
 }
 
 // ----------------------------------------------------------------- the tunnel
@@ -261,7 +293,11 @@ async fn a_request_through_the_tunnel_is_opaque_on_the_wire() {
     let sealed = tunnel::client::seal_request(&server_pub, inner.as_bytes()).unwrap();
 
     // Nothing recognisable survives into the bytes that cross the wire.
-    for needle in [b"/v1/events".as_slice(), b"Bearer".as_slice(), b"01J8TUNNELLED".as_slice()] {
+    for needle in [
+        b"/v1/events".as_slice(),
+        b"Bearer".as_slice(),
+        b"01J8TUNNELLED".as_slice(),
+    ] {
         assert!(
             !sealed.envelope.windows(needle.len()).any(|w| w == needle),
             "the envelope leaked {:?}",
@@ -325,7 +361,10 @@ async fn an_impostor_holding_a_valid_certificate_still_learns_nothing() {
             .unwrap(),
     )
     .await;
-    assert!(status.is_client_error(), "the real server must reject it, got {status}");
+    assert!(
+        status.is_client_error(),
+        "the real server must reject it, got {status}"
+    );
 }
 
 #[tokio::test]
@@ -349,11 +388,19 @@ async fn the_tunnel_hides_whether_a_request_succeeded() {
             .unwrap(),
     )
     .await;
-    assert_eq!(status, StatusCode::OK, "the outer status must not reveal the inner one");
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "the outer status must not reveal the inner one"
+    );
 
     let plaintext = tunnel::client::open_response(&sealed.reply_key, &response).unwrap();
     let decoded: Value = serde_json::from_slice(&plaintext).unwrap();
-    assert_eq!(decoded["status"], json!(401), "the real answer is inside the ciphertext");
+    assert_eq!(
+        decoded["status"],
+        json!(401),
+        "the real answer is inside the ciphertext"
+    );
 }
 
 // -------------------------------------------------------------- the audit log
@@ -368,18 +415,29 @@ async fn the_audit_log_is_written_by_the_server_and_readable_only_by_the_account
     let audit_pub = x25519_dalek::PublicKey::from(&audit_secret);
     let phone = enrol(&app, &code, "phone", Some(audit_pub.as_bytes())).await;
 
-    let (_, invite) = call(&app, post_auth("/v1/enroll/invite", &phone.token, json!({}))).await;
+    let (_, invite) = call(
+        &app,
+        post_auth("/v1/enroll/invite", &phone.token, json!({})),
+    )
+    .await;
     let laptop = enrol(&app, invite["code"].as_str().unwrap(), "laptop", None).await;
     call(
         &app,
-        post_auth(&format!("/v1/devices/{}/revoke", laptop.device_id), &phone.token, json!({})),
+        post_auth(
+            &format!("/v1/devices/{}/revoke", laptop.device_id),
+            &phone.token,
+            json!({}),
+        ),
     )
     .await;
 
     let (status, entries) = call(&app, get_auth("/v1/audit?since=0", &phone.token)).await;
     assert_eq!(status, StatusCode::OK);
     let entries = entries.as_array().unwrap();
-    assert!(entries.len() >= 3, "enrolment, invite and revocation should all be logged");
+    assert!(
+        entries.len() >= 3,
+        "enrolment, invite and revocation should all be logged"
+    );
 
     // Nothing readable is stored: the device id does not appear in any blob.
     {
@@ -402,7 +460,9 @@ async fn the_audit_log_is_written_by_the_server_and_readable_only_by_the_account
     // The account key opens them.
     let mut kinds = Vec::new();
     for entry in entries {
-        let sealed = BASE64_STANDARD.decode(entry["sealed_entry"].as_str().unwrap()).unwrap();
+        let sealed = BASE64_STANDARD
+            .decode(entry["sealed_entry"].as_str().unwrap())
+            .unwrap();
         let opened = crypto::open_anonymous(&audit_secret, &sealed).unwrap();
         let parsed: audit::AuditEntry = serde_json::from_slice(&opened).unwrap();
         kinds.push(parsed.event);
@@ -416,10 +476,10 @@ async fn the_audit_log_is_written_by_the_server_and_readable_only_by_the_account
         "the revocation must be in the log: {kinds:?}"
     );
     assert!(
-        kinds
-            .iter()
-            .any(|e| matches!(e, audit::AuditEvent::DeviceEnrolled { display_name, .. }
-                if display_name == "laptop")),
+        kinds.iter().any(
+            |e| matches!(e, audit::AuditEvent::DeviceEnrolled { display_name, .. }
+                if display_name == "laptop")
+        ),
         "enrolment must be in the log"
     );
 }
@@ -436,8 +496,18 @@ async fn a_later_device_cannot_redirect_the_audit_log() {
     // A second device tries to install its own key.
     let attacker_secret = StaticSecret::from(rand32());
     let attacker_pub = x25519_dalek::PublicKey::from(&attacker_secret);
-    let (_, invite) = call(&app, post_auth("/v1/enroll/invite", &phone.token, json!({}))).await;
-    enrol(&app, invite["code"].as_str().unwrap(), "rogue", Some(attacker_pub.as_bytes())).await;
+    let (_, invite) = call(
+        &app,
+        post_auth("/v1/enroll/invite", &phone.token, json!({})),
+    )
+    .await;
+    enrol(
+        &app,
+        invite["code"].as_str().unwrap(),
+        "rogue",
+        Some(attacker_pub.as_bytes()),
+    )
+    .await;
 
     let (_, entries) = call(&app, get_auth("/v1/audit?since=0", &phone.token)).await;
     let sealed = BASE64_STANDARD
@@ -467,7 +537,10 @@ async fn repeated_challenges_for_one_device_are_throttled() {
     for attempt in 0..40 {
         let (status, _) = call(
             &app,
-            post("/v1/auth/challenge", json!({ "device_id": phone.device_id })),
+            post(
+                "/v1/auth/challenge",
+                json!({ "device_id": phone.device_id }),
+            ),
         )
         .await;
         if status == StatusCode::TOO_MANY_REQUESTS {
@@ -475,7 +548,10 @@ async fn repeated_challenges_for_one_device_are_throttled() {
             break;
         }
     }
-    assert!(throttled_at.is_some(), "an unauthenticated route must eventually push back");
+    assert!(
+        throttled_at.is_some(),
+        "an unauthenticated route must eventually push back"
+    );
 }
 
 #[tokio::test]
@@ -483,20 +559,43 @@ async fn throttling_one_device_does_not_lock_out_another() {
     let (app, db) = build();
     let code = bootstrap_code(&db).await;
     let phone = enrol(&app, &code, "phone", None).await;
-    let (_, invite) = call(&app, post_auth("/v1/enroll/invite", &phone.token, json!({}))).await;
+    let (_, invite) = call(
+        &app,
+        post_auth("/v1/enroll/invite", &phone.token, json!({})),
+    )
+    .await;
     let laptop = enrol(&app, invite["code"].as_str().unwrap(), "laptop", None).await;
 
     // Exhaust the phone's bucket.
     for _ in 0..40 {
-        call(&app, post("/v1/auth/challenge", json!({ "device_id": phone.device_id }))).await;
+        call(
+            &app,
+            post(
+                "/v1/auth/challenge",
+                json!({ "device_id": phone.device_id }),
+            ),
+        )
+        .await;
     }
-    let (phone_status, _) =
-        call(&app, post("/v1/auth/challenge", json!({ "device_id": phone.device_id }))).await;
+    let (phone_status, _) = call(
+        &app,
+        post(
+            "/v1/auth/challenge",
+            json!({ "device_id": phone.device_id }),
+        ),
+    )
+    .await;
     assert_eq!(phone_status, StatusCode::TOO_MANY_REQUESTS);
 
     // The laptop is on its own bucket and must still be able to authenticate.
-    let (laptop_status, _) =
-        call(&app, post("/v1/auth/challenge", json!({ "device_id": laptop.device_id }))).await;
+    let (laptop_status, _) = call(
+        &app,
+        post(
+            "/v1/auth/challenge",
+            json!({ "device_id": laptop.device_id }),
+        ),
+    )
+    .await;
     assert_eq!(
         laptop_status,
         StatusCode::OK,
@@ -514,7 +613,10 @@ async fn a_throttled_response_says_when_to_come_back() {
     for _ in 0..40 {
         let response = app
             .clone()
-            .oneshot(post("/v1/auth/challenge", json!({ "device_id": phone.device_id })))
+            .oneshot(post(
+                "/v1/auth/challenge",
+                json!({ "device_id": phone.device_id }),
+            ))
             .await
             .unwrap();
         if response.status() == StatusCode::TOO_MANY_REQUESTS {
@@ -542,12 +644,23 @@ async fn the_last_device_cannot_be_revoked_by_accident() {
 
     let (status, refused) = call(
         &app,
-        post_auth(&format!("/v1/devices/{}/revoke", phone.device_id), &phone.token, json!({})),
+        post_auth(
+            &format!("/v1/devices/{}/revoke", phone.device_id),
+            &phone.token,
+            json!({}),
+        ),
     )
     .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST, "revoking the only device destroys the account");
+    assert_eq!(
+        status,
+        StatusCode::BAD_REQUEST,
+        "revoking the only device destroys the account"
+    );
     assert!(
-        refused["error"].as_str().unwrap().contains("last active device"),
+        refused["error"]
+            .as_str()
+            .unwrap()
+            .contains("last active device"),
         "the refusal must explain itself: {refused}"
     );
 
@@ -582,13 +695,21 @@ async fn revoking_is_unguarded_while_another_device_remains() {
     let (app, db) = build();
     let code = bootstrap_code(&db).await;
     let phone = enrol(&app, &code, "phone", None).await;
-    let (_, invite) = call(&app, post_auth("/v1/enroll/invite", &phone.token, json!({}))).await;
+    let (_, invite) = call(
+        &app,
+        post_auth("/v1/enroll/invite", &phone.token, json!({})),
+    )
+    .await;
     let laptop = enrol(&app, invite["code"].as_str().unwrap(), "laptop", None).await;
 
     // The common case -- a lost device with others still enrolled -- needs no ceremony.
     let (status, _) = call(
         &app,
-        post_auth(&format!("/v1/devices/{}/revoke", laptop.device_id), &phone.token, json!({})),
+        post_auth(
+            &format!("/v1/devices/{}/revoke", laptop.device_id),
+            &phone.token,
+            json!({}),
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK);

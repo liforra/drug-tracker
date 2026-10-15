@@ -62,17 +62,23 @@ impl Retention {
                 }
             }
         }
-        Self { event_days: days("TRACKER_EVENT_RETENTION_DAYS"), audit_days: days("TRACKER_AUDIT_RETENTION_DAYS") }
+        Self {
+            event_days: days("TRACKER_EVENT_RETENTION_DAYS"),
+            audit_days: days("TRACKER_AUDIT_RETENTION_DAYS"),
+        }
     }
 }
 
 /// Run one maintenance pass.
+#[allow(clippy::field_reassign_with_default)] // the counters are filled in as each DELETE runs
 pub fn sweep(conn: &Connection, retention: Retention) -> Result<SweepReport> {
     let cutoff = now();
     let mut report = SweepReport::default();
 
-    report.challenges =
-        conn.execute("DELETE FROM challenges WHERE expires_at <= ?1", params![cutoff])?;
+    report.challenges = conn.execute(
+        "DELETE FROM challenges WHERE expires_at <= ?1",
+        params![cutoff],
+    )?;
     report.tokens = conn.execute("DELETE FROM tokens WHERE expires_at <= ?1", params![cutoff])?;
 
     // Fulfilled enrollments: the sealed root key goes once the grace period is up.
@@ -139,7 +145,11 @@ mod tests {
 
     fn setup() -> Connection {
         let conn = open_in_memory().unwrap();
-        conn.execute("INSERT INTO accounts (id, created_at) VALUES ('acct', 0)", []).unwrap();
+        conn.execute(
+            "INSERT INTO accounts (id, created_at) VALUES ('acct', 0)",
+            [],
+        )
+        .unwrap();
         conn.execute(
             "INSERT INTO devices (id, account_id, display_name, ed25519_pub, x25519_pub, created_at)
              VALUES ('phone', 'acct', 'phone', x'00', x'00', 0)",
@@ -197,8 +207,9 @@ mod tests {
         .unwrap();
 
         assert_eq!(sweep(&conn, Retention::default()).unwrap().enrollments, 1);
-        let count: i64 =
-            conn.query_row("SELECT COUNT(*) FROM enrollments", [], |r| r.get(0)).unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM enrollments", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(count, 1, "an in-flight enrollment must not be swept away");
     }
 
@@ -223,8 +234,9 @@ mod tests {
 
         let report = sweep(&conn, Retention::default()).unwrap();
         assert_eq!((report.challenges, report.tokens), (1, 1));
-        let live: i64 =
-            conn.query_row("SELECT COUNT(*) FROM challenges", [], |r| r.get(0)).unwrap();
+        let live: i64 = conn
+            .query_row("SELECT COUNT(*) FROM challenges", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(live, 1, "a valid challenge must survive the sweep");
     }
 
@@ -239,10 +251,23 @@ mod tests {
         .unwrap();
 
         let report = sweep(&conn, Retention::default()).unwrap();
-        assert_eq!(report.events, 0, "ten-year-old records must survive by default");
+        assert_eq!(
+            report.events, 0,
+            "ten-year-old records must survive by default"
+        );
 
-        let report = sweep(&conn, Retention { event_days: Some(30), audit_days: None }).unwrap();
-        assert_eq!(report.events, 1, "and be removed once retention is configured");
+        let report = sweep(
+            &conn,
+            Retention {
+                event_days: Some(30),
+                audit_days: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            report.events, 1,
+            "and be removed once retention is configured"
+        );
     }
 
     #[test]
@@ -273,7 +298,14 @@ mod tests {
 
         purge_account(&mut conn, "acct").unwrap();
 
-        for table in ["events", "devices", "dek_wraps", "dek_epochs", "audit_log", "accounts"] {
+        for table in [
+            "events",
+            "devices",
+            "dek_wraps",
+            "dek_epochs",
+            "audit_log",
+            "accounts",
+        ] {
             let count: i64 = conn
                 .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0))
                 .unwrap();

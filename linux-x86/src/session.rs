@@ -8,9 +8,7 @@ use tracker_core::{
     tracker::{SyncReport, Tracker},
 };
 
-use crate::config::{
-    self, CachedLease, Config, ConfigError, Identity, Paths,
-};
+use crate::config::{self, CachedLease, Config, ConfigError, Identity, Paths};
 
 pub type Result<T> = std::result::Result<T, SessionError>;
 
@@ -82,7 +80,9 @@ impl Session {
             Err(_) => {}
         }
 
-        let lease = lease.filter(CachedLease::is_valid).ok_or(SessionError::Locked)?;
+        let lease = lease
+            .filter(CachedLease::is_valid)
+            .ok_or(SessionError::Locked)?;
 
         let store = Store::open(&paths.database)?;
         let deks = unlock_deks(&store, &identity, &lease)?;
@@ -172,7 +172,8 @@ impl Session {
             key_share_pending: None,
             expires_at: rotated.expires_at,
         };
-        self.tracker.persist_deks(&self.identity.device_secret, &next.share_bytes()?)?;
+        self.tracker
+            .persist_deks(&self.identity.device_secret, &next.share_bytes()?)?;
         config::save_lease(&self.paths, &next)?;
         self.client.lease_commit()?;
         self.lease = next;
@@ -187,15 +188,15 @@ impl Session {
 /// device knows which.
 fn unlock_deks(store: &Store, identity: &Identity, lease: &CachedLease) -> Result<Vec<(i64, Dek)>> {
     let current = lease.share_bytes()?;
-    if let Ok(deks) = store.load_deks(&identity.device_secret, &current) {
-        if !deks.is_empty() {
-            return Ok(deks);
-        }
+    if let Ok(deks) = store.load_deks(&identity.device_secret, &current)
+        && !deks.is_empty()
+    {
+        return Ok(deks);
     }
-    if let Some(pending) = lease.pending_bytes() {
-        if let Ok(deks) = store.load_deks(&identity.device_secret, &pending) {
-            return Ok(deks);
-        }
+    if let Some(pending) = lease.pending_bytes()
+        && let Ok(deks) = store.load_deks(&identity.device_secret, &pending)
+    {
+        return Ok(deks);
     }
     Ok(Vec::new())
 }
@@ -217,8 +218,10 @@ pub fn enroll(
         .try_into()
         .map_err(|_| ConfigError::Decode("server key must be 32 bytes".into()))?;
 
-    let client =
-        SyncClient::new(ServerConfig { base_url: server_url.to_string(), server_pub });
+    let client = SyncClient::new(ServerConfig {
+        base_url: server_url.to_string(),
+        server_pub,
+    });
 
     // The first device establishes the account's audit key; later ones send nothing and
     // the server keeps the original.
@@ -258,7 +261,13 @@ pub fn enroll(
     let store = Store::open(&paths.database)?;
     if client.current_epoch()?.is_none() {
         let dek = Dek::generate()?;
-        client.publish_epoch(1, &[(device_id.clone(), dek.wrap_to(&identity.device.x25519_public())?)])?;
+        client.publish_epoch(
+            1,
+            &[(
+                device_id.clone(),
+                dek.wrap_to(&identity.device.x25519_public())?,
+            )],
+        )?;
 
         let mut tracker = Tracker::open(store, vec![(1, dek)], device_id.clone())?;
         tracker.persist_deks(&identity.device_secret, &cached.share_bytes()?)?;
@@ -309,7 +318,9 @@ pub fn approve_devices(session: &mut Session) -> Result<Vec<String>> {
         else {
             continue;
         };
-        let Ok(raw) = BASE64_STANDARD.decode(encoded) else { continue };
+        let Ok(raw) = BASE64_STANDARD.decode(encoded) else {
+            continue;
+        };
         let Ok(key): std::result::Result<[u8; 32], _> = raw.as_slice().try_into() else {
             continue;
         };

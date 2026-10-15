@@ -67,10 +67,18 @@ impl RootKey {
     /// key on every device. It is not secret; storing it alongside the account is fine.
     pub fn from_passphrase(passphrase: &str, salt: &[u8]) -> Result<Self> {
         if salt.len() < MIN_SALT_LEN {
-            return Err(CryptoError::SaltTooShort { minimum: MIN_SALT_LEN, got: salt.len() });
+            return Err(CryptoError::SaltTooShort {
+                minimum: MIN_SALT_LEN,
+                got: salt.len(),
+            });
         }
-        let params = Params::new(ARGON_MEMORY_KIB, ARGON_ITERATIONS, ARGON_LANES, Some(KEY_LEN))
-            .map_err(|e| CryptoError::Derivation(e.to_string()))?;
+        let params = Params::new(
+            ARGON_MEMORY_KIB,
+            ARGON_ITERATIONS,
+            ARGON_LANES,
+            Some(KEY_LEN),
+        )
+        .map_err(|e| CryptoError::Derivation(e.to_string()))?;
         let argon = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 
         let mut out = [0u8; KEY_LEN];
@@ -179,11 +187,17 @@ impl DeviceIdentity {
         rand::rngs::OsRng
             .try_fill_bytes(&mut e)
             .map_err(|err| CryptoError::Rng(err.to_string()))?;
-        Ok(Self { x25519: StaticSecret::from(x), ed25519: ed25519_dalek::SigningKey::from_bytes(&e) })
+        Ok(Self {
+            x25519: StaticSecret::from(x),
+            ed25519: ed25519_dalek::SigningKey::from_bytes(&e),
+        })
     }
 
     pub fn from_bytes(x: [u8; KEY_LEN], e: [u8; KEY_LEN]) -> Self {
-        Self { x25519: StaticSecret::from(x), ed25519: ed25519_dalek::SigningKey::from_bytes(&e) }
+        Self {
+            x25519: StaticSecret::from(x),
+            ed25519: ed25519_dalek::SigningKey::from_bytes(&e),
+        }
     }
 
     pub fn x25519_public(&self) -> [u8; KEY_LEN] {
@@ -229,7 +243,12 @@ pub fn unwrap_local(key: &[u8; KEY_LEN], wrapped: &[u8]) -> Result<Vec<u8>> {
         return Err(CryptoError::Malformed);
     }
     let (nonce, ciphertext) = wrapped.split_at(NONCE_LEN);
-    primitives::aead_open(key, &primitives::to_nonce(nonce)?, b"dek-bundle", ciphertext)
+    primitives::aead_open(
+        key,
+        &primitives::to_nonce(nonce)?,
+        b"dek-bundle",
+        ciphertext,
+    )
 }
 
 #[cfg(test)]
@@ -253,9 +272,17 @@ mod tests {
     #[test]
     fn every_device_derives_the_same_audit_keypair() {
         let salt = b"account-salt-16b";
-        let (_, first) = RootKey::from_passphrase("shared", salt).unwrap().audit_keypair();
-        let (_, second) = RootKey::from_passphrase("shared", salt).unwrap().audit_keypair();
-        assert_eq!(first.as_bytes(), second.as_bytes(), "all devices must read the same log");
+        let (_, first) = RootKey::from_passphrase("shared", salt)
+            .unwrap()
+            .audit_keypair();
+        let (_, second) = RootKey::from_passphrase("shared", salt)
+            .unwrap()
+            .audit_keypair();
+        assert_eq!(
+            first.as_bytes(),
+            second.as_bytes(),
+            "all devices must read the same log"
+        );
     }
 
     #[test]
@@ -273,7 +300,10 @@ mod tests {
         let dek = Dek::generate().unwrap();
         let (nonce, ciphertext) = dek.seal("entry-a", b"session started").unwrap();
 
-        assert_eq!(dek.open("entry-a", &nonce, &ciphertext).unwrap(), b"session started");
+        assert_eq!(
+            dek.open("entry-a", &nonce, &ciphertext).unwrap(),
+            b"session started"
+        );
         assert!(
             dek.open("entry-b", &nonce, &ciphertext).is_err(),
             "a record must not be replayable under a different id"

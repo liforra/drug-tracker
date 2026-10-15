@@ -9,7 +9,9 @@ pub mod model;
 pub mod substances;
 pub mod terms;
 
-pub use engine::{Curve, Dose, DoseResponse, concentration_ng_ml, dose_response, metabolite_response};
+pub use engine::{
+    Curve, Dose, DoseResponse, concentration_ng_ml, dose_response, metabolite_response,
+};
 pub use model::{
     Absorption, Disposition, Interaction, Metabolite, Route, Subject, Substance, ToleranceModel,
 };

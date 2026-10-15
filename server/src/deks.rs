@@ -66,7 +66,10 @@ pub fn wraps_for_device(
          ORDER BY epoch ASC",
     )?;
     let rows = stmt.query_map(params![account_id, device_id, since_epoch], |row| {
-        Ok(Wrap { epoch: row.get(0)?, wrapped_dek: row.get(1)? })
+        Ok(Wrap {
+            epoch: row.get(0)?,
+            wrapped_dek: row.get(1)?,
+        })
     })?;
     Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
 }
@@ -108,7 +111,10 @@ pub fn publish_epoch(
 
     let current = current_epoch(conn, account_id)?.unwrap_or(0);
     if epoch <= current {
-        return Err(DekError::StaleEpoch { given: epoch, current });
+        return Err(DekError::StaleEpoch {
+            given: epoch,
+            current,
+        });
     }
 
     let active = active_devices(conn, account_id)?;
@@ -134,7 +140,10 @@ pub fn publish_epoch(
     tx.commit()?;
 
     let covered: Vec<&String> = wraps.iter().map(|(id, _)| id).collect();
-    let uncovered = active.into_iter().filter(|id| !covered.contains(&id)).collect();
+    let uncovered = active
+        .into_iter()
+        .filter(|id| !covered.contains(&id))
+        .collect();
     Ok(Published { epoch, uncovered })
 }
 
@@ -195,7 +204,10 @@ pub fn backfill_wraps(
 /// Housekeeping, not protection: a device that already pulled its wraps has them. What
 /// actually cuts it off is that the next epoch is never sealed to it.
 pub fn drop_wraps_for_device(conn: &Connection, device_id: &str) -> Result<usize> {
-    Ok(conn.execute("DELETE FROM dek_wraps WHERE device_id = ?1", params![device_id])?)
+    Ok(conn.execute(
+        "DELETE FROM dek_wraps WHERE device_id = ?1",
+        params![device_id],
+    )?)
 }
 
 #[cfg(test)]
@@ -205,7 +217,11 @@ mod tests {
 
     fn setup() -> Connection {
         let conn = open_in_memory().unwrap();
-        conn.execute("INSERT INTO accounts (id, created_at) VALUES ('acct', 0)", []).unwrap();
+        conn.execute(
+            "INSERT INTO accounts (id, created_at) VALUES ('acct', 0)",
+            [],
+        )
+        .unwrap();
         for id in ["phone", "laptop"] {
             conn.execute(
                 "INSERT INTO devices (id, account_id, display_name, ed25519_pub, x25519_pub, created_at)
@@ -231,7 +247,10 @@ mod tests {
             "acct",
             "phone",
             1,
-            &[("phone".into(), b"for-phone".to_vec()), ("laptop".into(), b"for-laptop".to_vec())],
+            &[
+                ("phone".into(), b"for-phone".to_vec()),
+                ("laptop".into(), b"for-laptop".to_vec()),
+            ],
         )
         .unwrap();
 
@@ -243,7 +262,10 @@ mod tests {
         assert_eq!(phone[0].wrapped_dek, b"for-phone");
 
         let laptop = wraps_for_device(&conn, "acct", "laptop", 0).unwrap();
-        assert_eq!(laptop[0].wrapped_dek, b"for-laptop", "each device gets only its own");
+        assert_eq!(
+            laptop[0].wrapped_dek, b"for-laptop",
+            "each device gets only its own"
+        );
     }
 
     #[test]
@@ -254,7 +276,10 @@ mod tests {
             "acct",
             "phone",
             1,
-            &[("phone".into(), b"a".to_vec()), ("laptop".into(), b"b".to_vec())],
+            &[
+                ("phone".into(), b"a".to_vec()),
+                ("laptop".into(), b"b".to_vec()),
+            ],
         )
         .unwrap();
 
@@ -266,7 +291,10 @@ mod tests {
             "acct",
             "phone",
             2,
-            &[("phone".into(), b"c".to_vec()), ("laptop".into(), b"d".to_vec())],
+            &[
+                ("phone".into(), b"c".to_vec()),
+                ("laptop".into(), b"d".to_vec()),
+            ],
         );
         assert!(
             matches!(refused, Err(DekError::UntrustedTarget(ref id)) if id == "laptop"),
@@ -274,9 +302,18 @@ mod tests {
         );
 
         // Sealing to the remaining device alone is accepted.
-        let ok = publish_epoch(&mut conn, "acct", "phone", 2, &[("phone".into(), b"c".to_vec())])
-            .unwrap();
-        assert!(ok.uncovered.is_empty(), "the revoked device is no longer 'active'");
+        let ok = publish_epoch(
+            &mut conn,
+            "acct",
+            "phone",
+            2,
+            &[("phone".into(), b"c".to_vec())],
+        )
+        .unwrap();
+        assert!(
+            ok.uncovered.is_empty(),
+            "the revoked device is no longer 'active'"
+        );
         assert_eq!(current_epoch(&conn, "acct").unwrap(), Some(2));
     }
 
@@ -288,15 +325,25 @@ mod tests {
             "acct",
             "phone",
             1,
-            &[("phone".into(), b"a".to_vec()), ("laptop".into(), b"b".to_vec())],
+            &[
+                ("phone".into(), b"a".to_vec()),
+                ("laptop".into(), b"b".to_vec()),
+            ],
         )
         .unwrap();
-        assert_eq!(wraps_for_device(&conn, "acct", "laptop", 0).unwrap().len(), 1);
+        assert_eq!(
+            wraps_for_device(&conn, "acct", "laptop", 0).unwrap().len(),
+            1
+        );
 
         crate::lease::revoke(&conn, "laptop").unwrap();
         drop_wraps_for_device(&conn, "laptop").unwrap();
 
-        assert!(wraps_for_device(&conn, "acct", "laptop", 0).unwrap().is_empty());
+        assert!(
+            wraps_for_device(&conn, "acct", "laptop", 0)
+                .unwrap()
+                .is_empty()
+        );
         assert_eq!(
             wraps_for_device(&conn, "acct", "phone", 0).unwrap().len(),
             1,
@@ -307,11 +354,23 @@ mod tests {
     #[test]
     fn epochs_only_move_forward() {
         let mut conn = setup();
-        publish_epoch(&mut conn, "acct", "phone", 5, &[("phone".into(), b"a".to_vec())]).unwrap();
+        publish_epoch(
+            &mut conn,
+            "acct",
+            "phone",
+            5,
+            &[("phone".into(), b"a".to_vec())],
+        )
+        .unwrap();
 
         for stale in [1, 5] {
-            let refused =
-                publish_epoch(&mut conn, "acct", "phone", stale, &[("phone".into(), b"x".to_vec())]);
+            let refused = publish_epoch(
+                &mut conn,
+                "acct",
+                "phone",
+                stale,
+                &[("phone".into(), b"x".to_vec())],
+            );
             assert!(
                 matches!(refused, Err(DekError::StaleEpoch { .. })),
                 "epoch {stale} should have been rejected as stale"
@@ -323,9 +382,14 @@ mod tests {
     #[test]
     fn omitting_an_active_device_is_reported() {
         let mut conn = setup();
-        let published =
-            publish_epoch(&mut conn, "acct", "phone", 1, &[("phone".into(), b"a".to_vec())])
-                .unwrap();
+        let published = publish_epoch(
+            &mut conn,
+            "acct",
+            "phone",
+            1,
+            &[("phone".into(), b"a".to_vec())],
+        )
+        .unwrap();
         assert_eq!(
             published.uncovered,
             vec!["laptop".to_string()],
@@ -353,7 +417,11 @@ mod tests {
         assert_eq!(all[2].wrapped_dek, b"dek-3");
 
         let recent = wraps_for_device(&conn, "acct", "phone", 3).unwrap();
-        assert_eq!(recent.len(), 1, "an up-to-date device can skip what it already has");
+        assert_eq!(
+            recent.len(),
+            1,
+            "an up-to-date device can skip what it already has"
+        );
     }
 
     #[test]

@@ -61,9 +61,10 @@ fn random<const N: usize>() -> Result<[u8; N]> {
 
 /// Fixed-size view of a byte slice, erroring rather than panicking on a wrong length.
 pub fn to_array<const N: usize>(bytes: &[u8]) -> Result<[u8; N]> {
-    bytes
-        .try_into()
-        .map_err(|_| CryptoError::BadLength { expected: N, got: bytes.len() })
+    bytes.try_into().map_err(|_| CryptoError::BadLength {
+        expected: N,
+        got: bytes.len(),
+    })
 }
 
 pub fn to_key(bytes: &[u8]) -> Result<[u8; KEY_LEN]> {
@@ -85,17 +86,28 @@ fn derive(shared: &[u8], sender_pub: &[u8], recipient_pub: &[u8], info: &[u8]) -
 
     let hk = Hkdf::<Sha256>::new(Some(&salt), shared);
     let mut key = [0u8; KEY_LEN];
-    hk.expand(info, &mut key).expect("32 bytes is a valid HKDF output length");
+    hk.expand(info, &mut key)
+        .expect("32 bytes is a valid HKDF output length");
     key
 }
 
-pub fn aead_seal(key: &[u8; KEY_LEN], nonce: &[u8; NONCE_LEN], aad: &[u8], msg: &[u8]) -> Result<Vec<u8>> {
+pub fn aead_seal(
+    key: &[u8; KEY_LEN],
+    nonce: &[u8; NONCE_LEN],
+    aad: &[u8],
+    msg: &[u8],
+) -> Result<Vec<u8>> {
     XChaCha20Poly1305::new(key.into())
         .encrypt(XNonce::from_slice(nonce), Payload { msg, aad })
         .map_err(|_| CryptoError::Decrypt)
 }
 
-pub fn aead_open(key: &[u8; KEY_LEN], nonce: &[u8; NONCE_LEN], aad: &[u8], ct: &[u8]) -> Result<Vec<u8>> {
+pub fn aead_open(
+    key: &[u8; KEY_LEN],
+    nonce: &[u8; NONCE_LEN],
+    aad: &[u8],
+    ct: &[u8],
+) -> Result<Vec<u8>> {
     XChaCha20Poly1305::new(key.into())
         .decrypt(XNonce::from_slice(nonce), Payload { msg: ct, aad })
         .map_err(|_| CryptoError::Decrypt)
@@ -112,7 +124,12 @@ pub fn seal_anonymous(recipient_pub: &[u8; KEY_LEN], plaintext: &[u8]) -> Result
     let recipient = PublicKey::from(*recipient_pub);
 
     let shared = ephemeral.diffie_hellman(&recipient);
-    let key = derive(shared.as_bytes(), ephemeral_pub.as_bytes(), recipient_pub, INFO_AUDIT);
+    let key = derive(
+        shared.as_bytes(),
+        ephemeral_pub.as_bytes(),
+        recipient_pub,
+        INFO_AUDIT,
+    );
     let nonce = random::<NONCE_LEN>()?;
 
     let ciphertext = aead_seal(&key, &nonce, ephemeral_pub.as_bytes(), plaintext)?;
@@ -136,7 +153,12 @@ pub fn open_anonymous(recipient_secret: &StaticSecret, sealed: &[u8]) -> Result<
     let ephemeral_pub: [u8; KEY_LEN] = to_key(ephemeral_pub)?;
     let recipient_pub = PublicKey::from(recipient_secret);
     let shared = recipient_secret.diffie_hellman(&PublicKey::from(ephemeral_pub));
-    let key = derive(shared.as_bytes(), &ephemeral_pub, recipient_pub.as_bytes(), INFO_AUDIT);
+    let key = derive(
+        shared.as_bytes(),
+        &ephemeral_pub,
+        recipient_pub.as_bytes(),
+        INFO_AUDIT,
+    );
 
     aead_open(&key, &to_nonce(nonce)?, &ephemeral_pub, ciphertext)
 }
@@ -183,6 +205,47 @@ pub fn random_nonce() -> Result<[u8; NONCE_LEN]> {
     random::<NONCE_LEN>()
 }
 
+/// Client half of the request tunnel.
+///
+/// Kept beside the server-side primitives on purpose: both ends of this format have to
+/// agree byte for byte, and two copies in two crates is how they stop agreeing.
+pub struct SealedRequest {
+    pub envelope: Vec<u8>,
+    pub reply_key: [u8; KEY_LEN],
+}
+
+pub fn seal_request_envelope(
+    server_pub: &[u8; KEY_LEN],
+    plaintext: &[u8],
+) -> Result<SealedRequest> {
+    let (ephemeral, ephemeral_pub) = generate_static_keypair()?;
+    let keys = tunnel_keys(&ephemeral, server_pub, ephemeral_pub.as_bytes(), server_pub);
+    let nonce = random_nonce()?;
+    let ciphertext = aead_seal(
+        &keys.client_to_server,
+        &nonce,
+        ephemeral_pub.as_bytes(),
+        plaintext,
+    )?;
+
+    let mut envelope = Vec::with_capacity(KEY_LEN + NONCE_LEN + ciphertext.len());
+    envelope.extend_from_slice(ephemeral_pub.as_bytes());
+    envelope.extend_from_slice(&nonce);
+    envelope.extend_from_slice(&ciphertext);
+    Ok(SealedRequest {
+        envelope,
+        reply_key: keys.server_to_client,
+    })
+}
+
+pub fn open_response_envelope(reply_key: &[u8; KEY_LEN], response: &[u8]) -> Result<Vec<u8>> {
+    if response.len() < NONCE_LEN {
+        return Err(CryptoError::Malformed);
+    }
+    let (nonce, ciphertext) = response.split_at(NONCE_LEN);
+    aead_open(reply_key, &to_nonce(nonce)?, b"response", ciphertext)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -195,7 +258,10 @@ mod tests {
         assert_eq!(open_anonymous(&secret, &sealed).unwrap(), b"device revoked");
 
         let (other, _) = generate_static_keypair().unwrap();
-        assert!(open_anonymous(&other, &sealed).is_err(), "a different key must not open it");
+        assert!(
+            open_anonymous(&other, &sealed).is_err(),
+            "a different key must not open it"
+        );
     }
 
     #[test]
@@ -205,7 +271,10 @@ mod tests {
         let (_, public) = generate_static_keypair().unwrap();
         let a = seal_anonymous(public.as_bytes(), b"same message").unwrap();
         let b = seal_anonymous(public.as_bytes(), b"same message").unwrap();
-        assert_ne!(a, b, "each seal uses a fresh ephemeral key, so ciphertexts never repeat");
+        assert_ne!(
+            a, b,
+            "each seal uses a fresh ephemeral key, so ciphertexts never repeat"
+        );
     }
 
     #[test]
@@ -214,7 +283,10 @@ mod tests {
         let mut sealed = seal_anonymous(public.as_bytes(), b"enrolled laptop").unwrap();
         let last = sealed.len() - 1;
         sealed[last] ^= 0x01;
-        assert!(matches!(open_anonymous(&secret, &sealed), Err(CryptoError::Decrypt)));
+        assert!(matches!(
+            open_anonymous(&secret, &sealed),
+            Err(CryptoError::Decrypt)
+        ));
     }
 
     #[test]
@@ -222,7 +294,10 @@ mod tests {
         let (secret, _) = generate_static_keypair().unwrap();
         for len in [0, 10, KEY_LEN, KEY_LEN + NONCE_LEN - 1] {
             let sealed = vec![0u8; len];
-            assert!(matches!(open_anonymous(&secret, &sealed), Err(CryptoError::Malformed)));
+            assert!(matches!(
+                open_anonymous(&secret, &sealed),
+                Err(CryptoError::Malformed)
+            ));
         }
     }
 
@@ -231,10 +306,18 @@ mod tests {
         let (server_secret, server_pub) = generate_static_keypair().unwrap();
         let (client_ephemeral, client_pub) = generate_static_keypair().unwrap();
 
-        let client_side =
-            tunnel_keys(&client_ephemeral, server_pub.as_bytes(), client_pub.as_bytes(), server_pub.as_bytes());
-        let server_side =
-            tunnel_keys(&server_secret, client_pub.as_bytes(), client_pub.as_bytes(), server_pub.as_bytes());
+        let client_side = tunnel_keys(
+            &client_ephemeral,
+            server_pub.as_bytes(),
+            client_pub.as_bytes(),
+            server_pub.as_bytes(),
+        );
+        let server_side = tunnel_keys(
+            &server_secret,
+            client_pub.as_bytes(),
+            client_pub.as_bytes(),
+            server_pub.as_bytes(),
+        );
 
         assert_eq!(client_side.client_to_server, server_side.client_to_server);
         assert_eq!(client_side.server_to_client, server_side.server_to_client);
@@ -274,40 +357,9 @@ mod tests {
         let nonce = [9u8; NONCE_LEN];
         let ct = aead_seal(&key, &nonce, b"header", b"body").unwrap();
         assert_eq!(aead_open(&key, &nonce, b"header", &ct).unwrap(), b"body");
-        assert!(aead_open(&key, &nonce, b"other", &ct).is_err(), "aad is authenticated");
+        assert!(
+            aead_open(&key, &nonce, b"other", &ct).is_err(),
+            "aad is authenticated"
+        );
     }
-}
-
-/// Client half of the request tunnel.
-///
-/// Kept beside the server-side primitives on purpose: both ends of this format have to
-/// agree byte for byte, and two copies in two crates is how they stop agreeing.
-pub struct SealedRequest {
-    pub envelope: Vec<u8>,
-    pub reply_key: [u8; KEY_LEN],
-}
-
-pub fn seal_request_envelope(
-    server_pub: &[u8; KEY_LEN],
-    plaintext: &[u8],
-) -> Result<SealedRequest> {
-    let (ephemeral, ephemeral_pub) = generate_static_keypair()?;
-    let keys = tunnel_keys(&ephemeral, server_pub, ephemeral_pub.as_bytes(), server_pub);
-    let nonce = random_nonce()?;
-    let ciphertext =
-        aead_seal(&keys.client_to_server, &nonce, ephemeral_pub.as_bytes(), plaintext)?;
-
-    let mut envelope = Vec::with_capacity(KEY_LEN + NONCE_LEN + ciphertext.len());
-    envelope.extend_from_slice(ephemeral_pub.as_bytes());
-    envelope.extend_from_slice(&nonce);
-    envelope.extend_from_slice(&ciphertext);
-    Ok(SealedRequest { envelope, reply_key: keys.server_to_client })
-}
-
-pub fn open_response_envelope(reply_key: &[u8; KEY_LEN], response: &[u8]) -> Result<Vec<u8>> {
-    if response.len() < NONCE_LEN {
-        return Err(CryptoError::Malformed);
-    }
-    let (nonce, ciphertext) = response.split_at(NONCE_LEN);
-    aead_open(reply_key, &to_nonce(nonce)?, b"response", ciphertext)
 }

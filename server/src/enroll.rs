@@ -103,7 +103,14 @@ pub fn claim_invite(
     tx.execute(
         "INSERT INTO devices (id, account_id, display_name, ed25519_pub, x25519_pub, created_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![device_id, account_id, display_name, ed25519_pub, x25519_pub, now()],
+        params![
+            device_id,
+            account_id,
+            display_name,
+            ed25519_pub,
+            x25519_pub,
+            now()
+        ],
     )?;
     tx.execute(
         "UPDATE invites SET claimed_by = ?1 WHERE code = ?2",
@@ -116,7 +123,11 @@ pub fn claim_invite(
     )?;
 
     tx.commit()?;
-    Ok(Claimed { device_id, account_id, enrollment_id })
+    Ok(Claimed {
+        device_id,
+        account_id,
+        enrollment_id,
+    })
 }
 
 #[derive(Debug)]
@@ -174,11 +185,7 @@ pub fn deposit(
 
 /// The newcomer collects its sealed root key. Only the device the enrollment was opened
 /// for may fetch it.
-pub fn collect(
-    conn: &Connection,
-    enrollment_id: &str,
-    device_id: &str,
-) -> Result<Option<Vec<u8>>> {
+pub fn collect(conn: &Connection, enrollment_id: &str, device_id: &str) -> Result<Option<Vec<u8>>> {
     let row: Option<(String, Option<Vec<u8>>)> = conn
         .query_row(
             "SELECT new_device_id, wrapped_payload FROM enrollments WHERE id = ?1",
@@ -240,7 +247,11 @@ mod tests {
 
     fn setup() -> Connection {
         let conn = open_in_memory().unwrap();
-        conn.execute("INSERT INTO accounts (id, created_at) VALUES ('acct', 0)", []).unwrap();
+        conn.execute(
+            "INSERT INTO accounts (id, created_at) VALUES ('acct', 0)",
+            [],
+        )
+        .unwrap();
         conn
     }
 
@@ -251,7 +262,10 @@ mod tests {
         let first = claim_invite(&mut conn, &code, "phone", &[1u8; 32], &[2u8; 32]).unwrap();
         assert_eq!(first.account_id, "acct");
         let second = claim_invite(&mut conn, &code, "laptop", &[3u8; 32], &[4u8; 32]);
-        assert!(matches!(second, Err(EnrollError::BadInvite)), "codes are single-use");
+        assert!(
+            matches!(second, Err(EnrollError::BadInvite)),
+            "codes are single-use"
+        );
     }
 
     #[test]
@@ -267,7 +281,11 @@ mod tests {
         let (code, _) = create_invite(&conn, "acct", None).unwrap();
         let claimed = claim_invite(&mut conn, &code, "phone", &[1u8; 32], &[2u8; 32]).unwrap();
 
-        assert!(collect(&conn, &claimed.enrollment_id, &claimed.device_id).unwrap().is_none());
+        assert!(
+            collect(&conn, &claimed.enrollment_id, &claimed.device_id)
+                .unwrap()
+                .is_none()
+        );
 
         deposit(&conn, &claimed.enrollment_id, "acct", b"sealed-root-key").unwrap();
         let got = collect(&conn, &claimed.enrollment_id, &claimed.device_id).unwrap();
@@ -289,9 +307,13 @@ mod tests {
             assert_eq!(again, first);
         }
 
-        let count: i64 =
-            conn.query_row("SELECT COUNT(*) FROM invites", [], |r| r.get(0)).unwrap();
-        assert_eq!(count, 1, "an unclaimed invite is a credential; do not scatter them");
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM invites", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(
+            count, 1,
+            "an unclaimed invite is a credential; do not scatter them"
+        );
     }
 
     #[test]

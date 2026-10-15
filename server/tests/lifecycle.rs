@@ -29,8 +29,11 @@ struct TestDevice {
 
 fn build() -> (Router, Arc<Mutex<rusqlite::Connection>>) {
     let conn = db::open_in_memory().unwrap();
-    conn.execute("INSERT INTO accounts (id, created_at) VALUES ('primary', 0)", [])
-        .unwrap();
+    conn.execute(
+        "INSERT INTO accounts (id, created_at) VALUES ('primary', 0)",
+        [],
+    )
+    .unwrap();
     let db = Arc::new(Mutex::new(conn));
     (api::router(api::AppState::new(db.clone())), db)
 }
@@ -94,15 +97,24 @@ async fn enrol(app: &Router, code: &str, name: &str) -> TestDevice {
     assert_eq!(status, StatusCode::OK, "claim failed: {claimed}");
     let device_id = claimed["device_id"].as_str().unwrap().to_string();
 
-    let token = authenticate(app, &device_id, &signing_key).await.expect("auth");
-    TestDevice { signing_key, device_id, token }
+    let token = authenticate(app, &device_id, &signing_key)
+        .await
+        .expect("auth");
+    TestDevice {
+        signing_key,
+        device_id,
+        token,
+    }
 }
 
 /// Challenge-response. Returns None if the server refuses, which is what a revoked
 /// device sees.
 async fn authenticate(app: &Router, device_id: &str, key: &SigningKey) -> Option<String> {
-    let (status, challenge) =
-        call(app, post("/v1/auth/challenge", json!({ "device_id": device_id }))).await;
+    let (status, challenge) = call(
+        app,
+        post("/v1/auth/challenge", json!({ "device_id": device_id })),
+    )
+    .await;
     if status != StatusCode::OK {
         return None;
     }
@@ -111,7 +123,10 @@ async fn authenticate(app: &Router, device_id: &str, key: &SigningKey) -> Option
 
     let (status, verified) = call(
         app,
-        post("/v1/auth/verify", json!({ "nonce": nonce, "signature": signature })),
+        post(
+            "/v1/auth/verify",
+            json!({ "nonce": nonce, "signature": signature }),
+        ),
     )
     .await;
     if status != StatusCode::OK {
@@ -139,7 +154,11 @@ async fn a_device_enrols_syncs_and_is_revoked() {
     let phone = enrol(&app, &code, "phone").await;
 
     // --- the device can take a lease -------------------------------------------
-    let (status, lease) = call(&app, post_auth("/v1/lease/acquire", &phone.token, json!({}))).await;
+    let (status, lease) = call(
+        &app,
+        post_auth("/v1/lease/acquire", &phone.token, json!({})),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
     let share = lease["key_share"].as_str().unwrap().to_string();
     assert_eq!(BASE64_STANDARD.decode(&share).unwrap().len(), 32);
@@ -192,11 +211,25 @@ async fn a_device_enrols_syncs_and_is_revoked() {
     );
 
     // Re-authenticating fails too, and says why: this flag is what triggers the wipe.
-    let (status, err) =
-        call(&app, post("/v1/auth/challenge", json!({ "device_id": phone.device_id }))).await;
+    let (status, err) = call(
+        &app,
+        post(
+            "/v1/auth/challenge",
+            json!({ "device_id": phone.device_id }),
+        ),
+    )
+    .await;
     assert_eq!(status, StatusCode::FORBIDDEN);
-    assert_eq!(err["revoked"], json!(true), "the client must be able to tell revoked apart");
-    assert!(authenticate(&app, &phone.device_id, &phone.signing_key).await.is_none());
+    assert_eq!(
+        err["revoked"],
+        json!(true),
+        "the client must be able to tell revoked apart"
+    );
+    assert!(
+        authenticate(&app, &phone.device_id, &phone.signing_key)
+            .await
+            .is_none()
+    );
 }
 
 #[tokio::test]
@@ -204,14 +237,20 @@ async fn revocation_destroys_the_key_share_not_just_a_flag() {
     let (app, db) = build();
     let code = bootstrap_code(&db).await;
     let phone = enrol(&app, &code, "phone").await;
-    call(&app, post_auth("/v1/lease/acquire", &phone.token, json!({}))).await;
+    call(
+        &app,
+        post_auth("/v1/lease/acquire", &phone.token, json!({})),
+    )
+    .await;
 
     {
         let conn = db.lock().unwrap();
         let share: Option<Vec<u8>> = conn
-            .query_row("SELECT key_share FROM devices WHERE id = ?1", [&phone.device_id], |r| {
-                r.get(0)
-            })
+            .query_row(
+                "SELECT key_share FROM devices WHERE id = ?1",
+                [&phone.device_id],
+                |r| r.get(0),
+            )
             .unwrap();
         assert!(share.is_some(), "precondition: a share exists");
     }
@@ -228,7 +267,11 @@ async fn revocation_destroys_the_key_share_not_just_a_flag() {
 
     let conn = db.lock().unwrap();
     let share: Option<Vec<u8>> = conn
-        .query_row("SELECT key_share FROM devices WHERE id = ?1", [&phone.device_id], |r| r.get(0))
+        .query_row(
+            "SELECT key_share FROM devices WHERE id = ?1",
+            [&phone.device_id],
+            |r| r.get(0),
+        )
         .unwrap();
     assert!(
         share.is_none(),
@@ -242,24 +285,40 @@ async fn the_two_phase_rotation_survives_a_crash_before_commit() {
     let code = bootstrap_code(&db).await;
     let phone = enrol(&app, &code, "phone").await;
 
-    let (_, first) = call(&app, post_auth("/v1/lease/acquire", &phone.token, json!({}))).await;
+    let (_, first) = call(
+        &app,
+        post_auth("/v1/lease/acquire", &phone.token, json!({})),
+    )
+    .await;
     let original = first["key_share"].as_str().unwrap().to_string();
 
     let (_, rotated) = call(&app, post_auth("/v1/lease/rotate", &phone.token, json!({}))).await;
-    assert_eq!(rotated["key_share"], json!(original), "old share stays valid pre-commit");
+    assert_eq!(
+        rotated["key_share"],
+        json!(original),
+        "old share stays valid pre-commit"
+    );
     let pending = rotated["key_share_pending"].as_str().unwrap().to_string();
     assert_ne!(pending, original);
 
     // Simulate the client dying here: it never sent the commit. On restart it acquires
     // again and must still be offered both, because we cannot know which wrapper it
     // managed to write.
-    let (_, recovered) = call(&app, post_auth("/v1/lease/acquire", &phone.token, json!({}))).await;
+    let (_, recovered) = call(
+        &app,
+        post_auth("/v1/lease/acquire", &phone.token, json!({})),
+    )
+    .await;
     assert_eq!(recovered["key_share"], json!(original));
     assert_eq!(recovered["key_share_pending"], json!(pending));
 
     // After a successful commit the superseded share is dropped for good.
     call(&app, post_auth("/v1/lease/commit", &phone.token, json!({}))).await;
-    let (_, settled) = call(&app, post_auth("/v1/lease/acquire", &phone.token, json!({}))).await;
+    let (_, settled) = call(
+        &app,
+        post_auth("/v1/lease/acquire", &phone.token, json!({})),
+    )
+    .await;
     assert_eq!(settled["key_share"], json!(pending));
     assert!(settled["key_share_pending"].is_null());
 }
@@ -271,8 +330,11 @@ async fn a_second_device_sees_the_first_devices_records() {
     let phone = enrol(&app, &code, "phone").await;
 
     // The phone invites the laptop; only an enrolled device can mint a code.
-    let (status, invite) =
-        call(&app, post_auth("/v1/enroll/invite", &phone.token, json!({}))).await;
+    let (status, invite) = call(
+        &app,
+        post_auth("/v1/enroll/invite", &phone.token, json!({})),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
     let laptop = enrol(&app, invite["code"].as_str().unwrap(), "laptop").await;
 
@@ -337,14 +399,18 @@ async fn the_server_stores_no_consumption_timestamp() {
     // The events table has exactly one time column and it is the arrival time. If a
     // consumption timestamp ever appears here in plaintext, this test should fail.
     let conn = db.lock().unwrap();
-    let mut stmt = conn.prepare("SELECT name FROM pragma_table_info('events')").unwrap();
+    let mut stmt = conn
+        .prepare("SELECT name FROM pragma_table_info('events')")
+        .unwrap();
     let columns: Vec<String> = stmt
         .query_map([], |row| row.get(0))
         .unwrap()
         .collect::<Result<_, _>>()
         .unwrap();
-    let time_columns: Vec<&String> =
-        columns.iter().filter(|c| c.contains("_at") || c.contains("time")).collect();
+    let time_columns: Vec<&String> = columns
+        .iter()
+        .filter(|c| c.contains("_at") || c.contains("time"))
+        .collect();
     assert_eq!(
         time_columns,
         vec!["received_at"],
@@ -367,7 +433,11 @@ async fn a_retried_push_does_not_duplicate() {
     }
 
     let (_, pulled) = call(&app, get_auth("/v1/events?since=0", &phone.token)).await;
-    assert_eq!(pulled["events"].as_array().unwrap().len(), 1, "flaky networks must be safe");
+    assert_eq!(
+        pulled["events"].as_array().unwrap().len(),
+        1,
+        "flaky networks must be safe"
+    );
 }
 
 #[tokio::test]
@@ -391,7 +461,10 @@ async fn an_unenrolled_device_cannot_join_or_read() {
     // No token, no records.
     let (status, _) = call(
         &app,
-        Request::builder().uri("/v1/events?since=0").body(Body::empty()).unwrap(),
+        Request::builder()
+            .uri("/v1/events?since=0")
+            .body(Body::empty())
+            .unwrap(),
     )
     .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);

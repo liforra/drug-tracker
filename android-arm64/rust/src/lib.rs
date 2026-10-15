@@ -175,7 +175,10 @@ pub extern "system" fn Java_de_liforra_snustracker_NativeBridge_samples(
     to_secs: i64,
     steps: i32,
 ) -> jstring {
-    reply(&mut env, bridge::samples(from_secs, to_secs, steps.max(2) as usize))
+    reply(
+        &mut env,
+        bridge::samples(from_secs, to_secs, steps.max(2) as usize),
+    )
 }
 
 #[unsafe(no_mangle)]

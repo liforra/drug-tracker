@@ -13,11 +13,11 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use http_body_util::BodyExt;
-use tower::ServiceExt;
 use base64::prelude::*;
+use http_body_util::BodyExt;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
+use tower::ServiceExt;
 
 use crate::{
     audit, auth, db, deks, enroll, lease,
@@ -40,7 +40,10 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(db: Arc<Mutex<Connection>>) -> Self {
-        Self { db, limiter: Arc::new(RateLimiter::new()) }
+        Self {
+            db,
+            limiter: Arc::new(RateLimiter::new()),
+        }
     }
 }
 
@@ -92,9 +95,9 @@ impl IntoResponse for ApiError {
             | ApiError::BadRequest(_)
             | ApiError::Dek(_)
             | ApiError::Audit(audit::AuditError::KeyAlreadySet)
-            | ApiError::Tunnel(
-                tunnel::TunnelError::Malformed | tunnel::TunnelError::Crypto(_),
-            ) => StatusCode::BAD_REQUEST,
+            | ApiError::Tunnel(tunnel::TunnelError::Malformed | tunnel::TunnelError::Crypto(_)) => {
+                StatusCode::BAD_REQUEST
+            }
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
@@ -103,17 +106,30 @@ impl IntoResponse for ApiError {
         if status == StatusCode::INTERNAL_SERVER_ERROR {
             tracing::error!(error = %self, "request failed");
         }
-        let revoked = matches!(&self, ApiError::Auth(A::Revoked) | ApiError::Lease(L::Revoked));
+        let revoked = matches!(
+            &self,
+            ApiError::Auth(A::Revoked) | ApiError::Lease(L::Revoked)
+        );
 
         if let ApiError::RateLimited { retry_after_secs } = &self {
             return (
                 status,
                 [(header::RETRY_AFTER, retry_after_secs.to_string())],
-                Json(ErrorBody { error: self.to_string(), revoked }),
+                Json(ErrorBody {
+                    error: self.to_string(),
+                    revoked,
+                }),
             )
                 .into_response();
         }
-        (status, Json(ErrorBody { error: self.to_string(), revoked })).into_response()
+        (
+            status,
+            Json(ErrorBody {
+                error: self.to_string(),
+                revoked,
+            }),
+        )
+            .into_response()
     }
 }
 
@@ -151,9 +167,11 @@ fn session(conn: &Connection, headers: &HeaderMap) -> Result<db::Device, ApiErro
 }
 
 fn throttle(limiter: &RateLimiter, key: &str, quota: ratelimit::Quota) -> Result<(), ApiError> {
-    limiter.check(key, quota).map_err(|denied| ApiError::RateLimited {
-        retry_after_secs: denied.retry_after.as_secs().max(1),
-    })
+    limiter
+        .check(key, quota)
+        .map_err(|denied| ApiError::RateLimited {
+            retry_after_secs: denied.retry_after.as_secs().max(1),
+        })
 }
 
 /// Build the full surface: the plain routes plus the encrypting tunnel in front of
@@ -339,7 +357,10 @@ async fn list_deks(
     Ok(Json(
         wraps
             .into_iter()
-            .map(|w| DekWrap { epoch: w.epoch, wrapped_dek: b64(&w.wrapped_dek) })
+            .map(|w| DekWrap {
+                epoch: w.epoch,
+                wrapped_dek: b64(&w.wrapped_dek),
+            })
             .collect(),
     ))
 }
@@ -361,7 +382,9 @@ async fn current_dek_epoch(
 ) -> ApiResult<CurrentEpoch> {
     let conn = state.db.lock().unwrap();
     let device = session(&conn, &headers)?;
-    Ok(Json(CurrentEpoch { epoch: deks::current_epoch(&conn, &device.account_id)? }))
+    Ok(Json(CurrentEpoch {
+        epoch: deks::current_epoch(&conn, &device.account_id)?,
+    }))
 }
 
 #[derive(Deserialize)]
@@ -430,7 +453,10 @@ async fn backfill_dek_wraps(
     audit::record_best_effort(
         &conn,
         &device.account_id,
-        audit::AuditEvent::WrapsBackfilled { by_device: device.id.clone(), added },
+        audit::AuditEvent::WrapsBackfilled {
+            by_device: device.id.clone(),
+            added,
+        },
     );
 
     Ok(Json(BackfillResponse { added }))
@@ -451,7 +477,10 @@ async fn publish_dek_epoch(
 
     let mut wraps = Vec::with_capacity(req.wraps.len());
     for wrap in &req.wraps {
-        wraps.push((wrap.device_id.clone(), unb64(&wrap.wrapped_dek, "wrapped_dek")?));
+        wraps.push((
+            wrap.device_id.clone(),
+            unb64(&wrap.wrapped_dek, "wrapped_dek")?,
+        ));
     }
 
     let published =
@@ -474,7 +503,10 @@ async fn publish_dek_epoch(
         );
     }
 
-    Ok(Json(PublishEpochResponse { epoch: published.epoch, uncovered: published.uncovered }))
+    Ok(Json(PublishEpochResponse {
+        epoch: published.epoch,
+        uncovered: published.uncovered,
+    }))
 }
 
 // ------------------------------------------------------------------- audit
@@ -499,7 +531,10 @@ async fn read_audit(
     Ok(Json(
         entries
             .into_iter()
-            .map(|e| AuditEntryOut { seq: e.seq, sealed_entry: b64(&e.sealed_entry) })
+            .map(|e| AuditEntryOut {
+                seq: e.seq,
+                sealed_entry: b64(&e.sealed_entry),
+            })
             .collect(),
     ))
 }
@@ -521,7 +556,11 @@ async fn auth_challenge(
     Json(req): Json<ChallengeRequest>,
 ) -> ApiResult<ChallengeResponse> {
     // Keyed on the device id: one device being hammered must not lock out the others.
-    throttle(&state.limiter, &format!("challenge:{}", req.device_id), ratelimit::quotas::CHALLENGE)?;
+    throttle(
+        &state.limiter,
+        &format!("challenge:{}", req.device_id),
+        ratelimit::quotas::CHALLENGE,
+    )?;
     let conn = state.db.lock().unwrap();
     let nonce = auth::issue_challenge(&conn, &req.device_id)?;
     Ok(Json(ChallengeResponse { nonce }))
@@ -591,7 +630,9 @@ async fn push_events(
     Json(req): Json<PushRequest>,
 ) -> ApiResult<PushResponse> {
     if req.events.len() > MAX_PUSH {
-        return Err(ApiError::BadRequest(format!("at most {MAX_PUSH} events per push")));
+        return Err(ApiError::BadRequest(format!(
+            "at most {MAX_PUSH} events per push"
+        )));
     }
     let mut conn = state.db.lock().unwrap();
     let device = session(&conn, &headers)?;
@@ -612,7 +653,10 @@ async fn push_events(
     }
     tx.commit()?;
 
-    Ok(Json(PushResponse { cursor, accepted: req.events.len() }))
+    Ok(Json(PushResponse {
+        cursor,
+        accepted: req.events.len(),
+    }))
 }
 
 #[derive(Deserialize)]
@@ -699,7 +743,9 @@ async fn lease_acquire(
     audit::record_best_effort(
         &conn,
         &device.account_id,
-        audit::AuditEvent::LeaseAcquired { device_id: device.id.clone() },
+        audit::AuditEvent::LeaseAcquired {
+            device_id: device.id.clone(),
+        },
     );
     Ok(Json(lease_response(lease)))
 }
@@ -714,7 +760,9 @@ async fn lease_rotate(
     audit::record_best_effort(
         &conn,
         &device.account_id,
-        audit::AuditEvent::LeaseRotated { device_id: device.id.clone() },
+        audit::AuditEvent::LeaseRotated {
+            device_id: device.id.clone(),
+        },
     );
     Ok(Json(lease_response(lease)))
 }
@@ -872,7 +920,9 @@ async fn create_invite(
     audit::record_best_effort(
         &conn,
         &device.account_id,
-        audit::AuditEvent::InviteCreated { by_device: Some(device.id.clone()) },
+        audit::AuditEvent::InviteCreated {
+            by_device: Some(device.id.clone()),
+        },
     );
     Ok(Json(InviteResponse { code, expires_at }))
 }
@@ -1005,5 +1055,7 @@ async fn collect_wrapped(
     let conn = state.db.lock().unwrap();
     let device = session(&conn, &headers)?;
     let payload = enroll::collect(&conn, &enrollment_id, &device.id)?;
-    Ok(Json(CollectResponse { wrapped_payload: payload.as_deref().map(b64) }))
+    Ok(Json(CollectResponse {
+        wrapped_payload: payload.as_deref().map(b64),
+    }))
 }

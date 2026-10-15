@@ -6,16 +6,17 @@
 //! the curves behave the way the pharmacology says they do.
 
 use tracker_core::pk::{
-    Curve, Dose, Subject, dose_response, metabolite_response,
-    model::Absorption,
-    substances,
+    Curve, Dose, Subject, dose_response, metabolite_response, model::Absorption, substances,
 };
 
 const MIN: f64 = 60.0;
 const HOUR: f64 = 3600.0;
 
 fn subject() -> Subject {
-    Subject { body_mass_kg: 75.0, metabolism_factor: 1.0 }
+    Subject {
+        body_mass_kg: 75.0,
+        metabolism_factor: 1.0,
+    }
 }
 
 /// One 12 mg pouch, kept in for 30 minutes.
@@ -28,7 +29,11 @@ fn one_pouch(start: f64) -> Curve {
         &nicotine,
         route,
         &subject,
-        Dose { start_secs: start, duration_secs: Some(30.0 * MIN), nominal_mg: 12.0 },
+        Dose {
+            start_secs: start,
+            duration_secs: Some(30.0 * MIN),
+            nominal_mg: 12.0,
+        },
     ));
     curve
 }
@@ -85,7 +90,11 @@ fn doses_superimpose_linearly() {
             &nicotine,
             route,
             &subject,
-            Dose { start_secs: 0.0, duration_secs: Some(30.0 * MIN), nominal_mg: 12.0 },
+            Dose {
+                start_secs: 0.0,
+                duration_secs: Some(30.0 * MIN),
+                nominal_mg: 12.0,
+            },
         ));
     }
 
@@ -117,7 +126,10 @@ fn a_days_pouches_accumulate_to_a_higher_trough_than_a_single_one() {
     }
     let after_first = curve.concentration_at(9.5 * HOUR);
     let late = curve.concentration_at(21.0 * HOUR);
-    assert!(late > after_first, "steady-state accumulation should raise the baseline");
+    assert!(
+        late > after_first,
+        "steady-state accumulation should raise the baseline"
+    );
 }
 
 #[test]
@@ -141,7 +153,9 @@ fn cotinine_is_the_stable_signal_nicotine_is_not() {
                 nominal_mg: 12.0,
             };
             let response = dose_response(&nicotine, route, &subject, dose);
-            meta.add(metabolite_response(&response, &nicotine, cotinine, &subject));
+            meta.add(metabolite_response(
+                &response, &nicotine, cotinine, &subject,
+            ));
             parent.add(response);
         }
     }
@@ -201,7 +215,11 @@ fn route_determines_the_shape_of_the_curve() {
             &cocaine,
             route,
             &subject,
-            Dose { start_secs: 0.0, duration_secs: None, nominal_mg: 50.0 },
+            Dose {
+                start_secs: 0.0,
+                duration_secs: None,
+                nominal_mg: 50.0,
+            },
         ));
         curve.peak(0.0, 4.0 * HOUR)
     };
@@ -210,7 +228,10 @@ fn route_determines_the_shape_of_the_curve() {
     let (t_nasal, c_nasal) = peak_for("intranasal");
     let (_, c_oral) = peak_for("oral");
 
-    assert!(t_smoked < 2.0 * MIN, "smoked should peak almost immediately");
+    assert!(
+        t_smoked < 2.0 * MIN,
+        "smoked should peak almost immediately"
+    );
     assert!(
         t_nasal > 15.0 * MIN,
         "intranasal Tmax should land well later, got {:.0} min",
@@ -220,7 +241,10 @@ fn route_determines_the_shape_of_the_curve() {
         c_smoked > c_nasal,
         "same absorbed dose delivered faster must reach a higher peak"
     );
-    assert!(c_oral < c_nasal, "first-pass loss should flatten the oral curve");
+    assert!(
+        c_oral < c_nasal,
+        "first-pass loss should flatten the oral curve"
+    );
 }
 
 #[test]
@@ -233,13 +257,17 @@ fn two_compartment_decay_is_faster_early_than_late() {
         &cocaine,
         route,
         &subject,
-        Dose { start_secs: 0.0, duration_secs: None, nominal_mg: 50.0 },
+        Dose {
+            start_secs: 0.0,
+            duration_secs: None,
+            nominal_mg: 50.0,
+        },
     ));
 
     // Both windows must span the same duration, or this compares nothing at all: a
     // steeper phase measured over a shorter window can still show the larger ratio.
-    let decay_over = |from: f64| curve.concentration_at(from + 15.0 * MIN)
-        / curve.concentration_at(from);
+    let decay_over =
+        |from: f64| curve.concentration_at(from + 15.0 * MIN) / curve.concentration_at(from);
     let early_ratio = decay_over(0.0);
     let late_ratio = decay_over(2.0 * HOUR);
     assert!(
@@ -262,10 +290,17 @@ fn an_open_session_falls_back_to_the_routes_default_duration() {
         route,
         &subject,
         // No end recorded yet -- the pouch is still in.
-        Dose { start_secs: 0.0, duration_secs: None, nominal_mg: 12.0 },
+        Dose {
+            start_secs: 0.0,
+            duration_secs: None,
+            nominal_mg: 12.0,
+        },
     ));
     let (_, peak) = open.peak(0.0, 4.0 * HOUR);
-    assert!(peak > 0.0, "an open session must still produce a usable estimate");
+    assert!(
+        peak > 0.0,
+        "an open session must still produce a usable estimate"
+    );
 }
 
 /// Exposure from one pouch used for `minutes`, as area under the curve over four hours.
@@ -281,7 +316,11 @@ fn exposure_over_4h(minutes: f64, nominal_mg: f64) -> f64 {
         &nicotine,
         route,
         &subject,
-        Dose { start_secs: 0.0, duration_secs: Some(minutes * MIN), nominal_mg },
+        Dose {
+            start_secs: 0.0,
+            duration_secs: Some(minutes * MIN),
+            nominal_mg,
+        },
     ));
     // Trapezoid on a one-minute grid. The curve is smooth on that scale.
     curve
@@ -334,7 +373,11 @@ fn peak_concentration_is_in_the_measured_range() {
         &nicotine,
         route,
         &subject,
-        Dose { start_secs: 0.0, duration_secs: Some(30.0 * MIN), nominal_mg: 11.0 },
+        Dose {
+            start_secs: 0.0,
+            duration_secs: Some(30.0 * MIN),
+            nominal_mg: 11.0,
+        },
     ));
 
     let (at, peak) = curve.peak(0.0, 4.0 * HOUR);
@@ -370,7 +413,10 @@ fn a_slow_metaboliser_reaches_higher_levels_on_the_same_intake() {
     let route = nicotine.route("buccal_pouch").unwrap();
 
     let level_for = |factor: f64| {
-        let subject = Subject { body_mass_kg: 75.0, metabolism_factor: factor };
+        let subject = Subject {
+            body_mass_kg: 75.0,
+            metabolism_factor: factor,
+        };
         let mut curve = Curve::new(subject.volume_l(nicotine.vd_l_per_kg));
         for i in 0..8 {
             curve.add(dose_response(
@@ -414,12 +460,21 @@ fn concentrations_are_never_negative() {
         &nicotine,
         route,
         &subject,
-        Dose { start_secs: 0.0, duration_secs: Some(30.0 * MIN), nominal_mg: 12.0 },
+        Dose {
+            start_secs: 0.0,
+            duration_secs: Some(30.0 * MIN),
+            nominal_mg: 12.0,
+        },
     );
-    meta.add(metabolite_response(&response, &nicotine, cotinine, &subject));
+    meta.add(metabolite_response(
+        &response, &nicotine, cotinine, &subject,
+    ));
 
     for days in 1..40 {
         let value = meta.concentration_at(days as f64 * 24.0 * HOUR);
-        assert!(value >= 0.0, "negative concentration {value} after {days} days");
+        assert!(
+            value >= 0.0,
+            "negative concentration {value} after {days} days"
+        );
     }
 }

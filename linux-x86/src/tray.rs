@@ -34,7 +34,11 @@ impl Tray for SnusTray {
 
     fn title(&self) -> String {
         match &self.snapshot.open {
-            Some(open) => format!("{} · {}", open.product_name, format_elapsed(open.started_at)),
+            Some(open) => format!(
+                "{} · {}",
+                open.product_name,
+                format_elapsed(open.started_at)
+            ),
             None => "Snus Tracker".into(),
         }
     }
@@ -43,7 +47,10 @@ impl Tray for SnusTray {
     /// not to have leaves an invisible tray item, which is a miserable failure mode for
     /// something whose entire job is being one click away.
     fn icon_pixmap(&self) -> Vec<Icon> {
-        vec![draw_icon(22, self.snapshot.open.is_some()), draw_icon(44, self.snapshot.open.is_some())]
+        vec![
+            draw_icon(22, self.snapshot.open.is_some()),
+            draw_icon(44, self.snapshot.open.is_some()),
+        ]
     }
 
     fn tool_tip(&self) -> ToolTip {
@@ -57,9 +64,7 @@ impl Tray for SnusTray {
         };
         description.push_str(&format!(
             "\nNikotin ca. {:.1} ng/mL ({:+.2}/min)\nHeute {} Pouches",
-            self.snapshot.nicotine_ng_ml,
-            self.snapshot.nicotine_rate,
-            self.snapshot.today_count
+            self.snapshot.nicotine_ng_ml, self.snapshot.nicotine_rate, self.snapshot.today_count
         ));
         if !self.snapshot.status.is_empty() {
             description.push('\n');
@@ -130,13 +135,21 @@ impl Tray for SnusTray {
 
         if self.snapshot.locked {
             items.push(
-                StandardItem { label: "Gesperrt — kein gültiges Lease".into(), enabled: false, ..Default::default() }
-                    .into(),
+                StandardItem {
+                    label: "Gesperrt — kein gültiges Lease".into(),
+                    enabled: false,
+                    ..Default::default()
+                }
+                .into(),
             );
         } else if self.snapshot.products.is_empty() {
             items.push(
-                StandardItem { label: "Keine Sorten angelegt".into(), enabled: false, ..Default::default() }
-                    .into(),
+                StandardItem {
+                    label: "Keine Sorten angelegt".into(),
+                    enabled: false,
+                    ..Default::default()
+                }
+                .into(),
             );
         } else {
             for product in &self.snapshot.products {
@@ -237,7 +250,11 @@ fn draw_icon(size: i32, active: bool) -> Icon {
     let inner = outer * 0.55;
 
     // Accent purple when a pouch is in, dim grey when idle -- the bar's palette.
-    let (r, g, b) = if active { (0xAC, 0x77, 0xFA) } else { (0x91, 0x8D, 0x9A) };
+    let (r, g, b) = if active {
+        (0xAC, 0x77, 0xFA)
+    } else {
+        (0x91, 0x8D, 0x9A)
+    };
 
     for y in 0..dimension {
         for x in 0..dimension {
@@ -266,7 +283,11 @@ fn draw_icon(size: i32, active: bool) -> Icon {
         }
     }
 
-    Icon { width: size, height: size, data }
+    Icon {
+        width: size,
+        height: size,
+        data,
+    }
 }
 
 /// Run the tray until the worker asks to stop.
@@ -275,7 +296,12 @@ pub async fn run(
     commands: mpsc::Sender<Command>,
     mut updates: tokio::sync::mpsc::UnboundedReceiver<Snapshot>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let handle = SnusTray { snapshot: initial, commands: commands.clone() }.spawn().await?;
+    let handle = SnusTray {
+        snapshot: initial,
+        commands: commands.clone(),
+    }
+    .spawn()
+    .await?;
 
     // The elapsed time in the title has to keep moving without anything happening, so
     // nudge the tray on a timer as well as on state changes.

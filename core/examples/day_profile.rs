@@ -10,7 +10,10 @@ fn main() {
     let nicotine = substances::nicotine();
     let route = nicotine.route("buccal_pouch").unwrap();
     let cotinine = &nicotine.metabolites[0];
-    let subject = Subject { body_mass_kg: 75.0, metabolism_factor: 1.0 };
+    let subject = Subject {
+        body_mass_kg: 75.0,
+        metabolism_factor: 1.0,
+    };
 
     let mut parent = Curve::new(subject.volume_l(nicotine.vd_l_per_kg));
     let mut meta = Curve::new(subject.volume_l(cotinine.vd_l_per_kg));
@@ -24,7 +27,9 @@ fn main() {
                 nominal_mg: 12.0,
             };
             let response = dose_response(&nicotine, route, &subject, dose);
-            meta.add(metabolite_response(&response, &nicotine, cotinine, &subject));
+            meta.add(metabolite_response(
+                &response, &nicotine, cotinine, &subject,
+            ));
             parent.add(response);
         }
     }
@@ -35,11 +40,19 @@ fn main() {
         &nicotine,
         route,
         &subject,
-        Dose { start_secs: 0.0, duration_secs: Some(30.0 * MIN), nominal_mg: 12.0 },
+        Dose {
+            start_secs: 0.0,
+            duration_secs: Some(30.0 * MIN),
+            nominal_mg: 12.0,
+        },
     ));
     let (t, c) = isolated.peak(0.0, 4.0 * HOUR);
     println!("Single 12 mg pouch in isolation:");
-    println!("  peak {:.1} ng/mL at {:.0} min after insertion", c, t / MIN);
+    println!(
+        "  peak {:.1} ng/mL at {:.0} min after insertion",
+        c,
+        t / MIN
+    );
 
     println!("\nDay 7, hourly (steady state):");
     println!("  {:>6}  {:>10}  {:>10}", "time", "nicotine", "cotinine");
@@ -67,5 +80,9 @@ fn main() {
         (hi - lo) / hi * 100.0
     };
     println!("\nRipple within one 90 min dosing cycle:");
-    println!("  nicotine {:.1}%   cotinine {:.1}%", ripple(&parent), ripple(&meta));
+    println!(
+        "  nicotine {:.1}%   cotinine {:.1}%",
+        ripple(&parent),
+        ripple(&meta)
+    );
 }

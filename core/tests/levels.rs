@@ -66,28 +66,65 @@ fn resting_the_pouch_stops_absorption_but_not_elimination() {
     let level_straight = levels::build_at(&uninterrupted, at(60)).nicotine_at(at(60));
 
     // Same wall-clock hour, but the pouch spent the middle half of it on a desk.
-    let rested = state_with(&seed, vec![
-        session_started("e1", 0, &product),
-        entry("e2", 15, Event::SessionPaused { session_id: "s1".into(), paused_at: at(15) }),
-        entry("e3", 45, Event::SessionResumed { session_id: "s1".into(), resumed_at: at(45) }),
-    ]);
+    let rested = state_with(
+        &seed,
+        vec![
+            session_started("e1", 0, &product),
+            entry(
+                "e2",
+                15,
+                Event::SessionPaused {
+                    session_id: "s1".into(),
+                    paused_at: at(15),
+                },
+            ),
+            entry(
+                "e3",
+                45,
+                Event::SessionResumed {
+                    session_id: "s1".into(),
+                    resumed_at: at(45),
+                },
+            ),
+        ],
+    );
     let level_rested = levels::build_at(&rested, at(60)).nicotine_at(at(60));
 
     assert!(
         level_rested < level_straight,
         "a rested pouch must deliver less over the same hour ({level_rested:.1} vs {level_straight:.1})"
     );
-    assert!(level_rested > 0.0, "resting must not erase what was already absorbed");
+    assert!(
+        level_rested > 0.0,
+        "resting must not erase what was already absorbed"
+    );
 }
 
 #[test]
 fn a_rested_pouch_keeps_what_it_has_not_released_yet() {
     let (seed, product) = seeded();
-    let state = state_with(&seed, vec![
-        session_started("e1", 0, &product),
-        entry("e2", 10, Event::SessionPaused { session_id: "s1".into(), paused_at: at(10) }),
-        entry("e3", 240, Event::SessionResumed { session_id: "s1".into(), resumed_at: at(240) }),
-    ]);
+    let state = state_with(
+        &seed,
+        vec![
+            session_started("e1", 0, &product),
+            entry(
+                "e2",
+                10,
+                Event::SessionPaused {
+                    session_id: "s1".into(),
+                    paused_at: at(10),
+                },
+            ),
+            entry(
+                "e3",
+                240,
+                Event::SessionResumed {
+                    session_id: "s1".into(),
+                    resumed_at: at(240),
+                },
+            ),
+        ],
+    );
     let curves = levels::build_at(&state, at(250));
     // Four hours after the first ten minutes, nearly all of that early dose is gone --
     // so anything still arriving has to be coming out of the pouch that went back in.
@@ -100,36 +137,69 @@ fn a_rested_pouch_keeps_what_it_has_not_released_yet() {
 #[test]
 fn contact_time_is_what_the_pouch_spends_not_wall_clock() {
     let (seed, product) = seeded();
-    let state = state_with(&seed, vec![
-        session_started("e1", 0, &product),
-        entry("e2", 5, Event::SessionPaused { session_id: "s1".into(), paused_at: at(5) }),
-        entry("e3", 65, Event::SessionResumed { session_id: "s1".into(), resumed_at: at(65) }),
-    ]);
+    let state = state_with(
+        &seed,
+        vec![
+            session_started("e1", 0, &product),
+            entry(
+                "e2",
+                5,
+                Event::SessionPaused {
+                    session_id: "s1".into(),
+                    paused_at: at(5),
+                },
+            ),
+            entry(
+                "e3",
+                65,
+                Event::SessionResumed {
+                    session_id: "s1".into(),
+                    resumed_at: at(65),
+                },
+            ),
+        ],
+    );
 
     let session = &state.sessions["s1"];
     // Seventy minutes of session, ten of them with the pouch actually in.
     assert_eq!(session.elapsed(at(70)).num_minutes(), 70);
     assert_eq!(session.contact_duration(at(70)).num_minutes(), 10);
-    assert!(session.is_paused() == false, "it went back in at minute 65");
+    assert!(!session.is_paused(), "it went back in at minute 65");
 
     let left = levels::remaining_release(&state, session, at(70)).unwrap();
-    assert_eq!(left.num_minutes(), 50, "resting must not burn the pouch's budget");
+    assert_eq!(
+        left.num_minutes(),
+        50,
+        "resting must not burn the pouch's budget"
+    );
 }
 
 #[test]
 fn a_pouch_still_resting_has_an_open_ended_pause() {
     let (seed, product) = seeded();
-    let state = state_with(&seed, vec![
-        session_started("e1", 0, &product),
-        entry("e2", 20, Event::SessionPaused { session_id: "s1".into(), paused_at: at(20) }),
-    ]);
+    let state = state_with(
+        &seed,
+        vec![
+            session_started("e1", 0, &product),
+            entry(
+                "e2",
+                20,
+                Event::SessionPaused {
+                    session_id: "s1".into(),
+                    paused_at: at(20),
+                },
+            ),
+        ],
+    );
 
     let session = &state.sessions["s1"];
     assert!(session.is_paused());
     assert_eq!(session.contact_duration(at(90)).num_minutes(), 20);
     // The clock stopped: an hour of resting adds nothing to what the pouch has spent.
     assert_eq!(
-        levels::remaining_release(&state, session, at(90)).unwrap().num_minutes(),
+        levels::remaining_release(&state, session, at(90))
+            .unwrap()
+            .num_minutes(),
         40
     );
 }
@@ -137,15 +207,36 @@ fn a_pouch_still_resting_has_an_open_ended_pause() {
 #[test]
 fn the_earliest_pause_wins_when_two_devices_race() {
     let (seed, product) = seeded();
-    let state = state_with(&seed, vec![
-        session_started("e1", 0, &product),
-        // The laptop noticed late; the phone had it right.
-        entry("e2", 30, Event::SessionPaused { session_id: "s1".into(), paused_at: at(30) }),
-        entry("e3", 31, Event::SessionPaused { session_id: "s1".into(), paused_at: at(20) }),
-    ]);
+    let state = state_with(
+        &seed,
+        vec![
+            session_started("e1", 0, &product),
+            // The laptop noticed late; the phone had it right.
+            entry(
+                "e2",
+                30,
+                Event::SessionPaused {
+                    session_id: "s1".into(),
+                    paused_at: at(30),
+                },
+            ),
+            entry(
+                "e3",
+                31,
+                Event::SessionPaused {
+                    session_id: "s1".into(),
+                    paused_at: at(20),
+                },
+            ),
+        ],
+    );
 
     let session = &state.sessions["s1"];
-    assert_eq!(session.pauses.len(), 1, "one physical rest, one recorded pause");
+    assert_eq!(
+        session.pauses.len(),
+        1,
+        "one physical rest, one recorded pause"
+    );
     assert_eq!(session.contact_duration(at(90)).num_minutes(), 20);
 }
 
@@ -154,11 +245,7 @@ fn the_earliest_pause_wins_when_two_devices_race() {
 /// exactly how a variety added in a terminal stayed invisible in the tray.
 #[test]
 fn a_tracker_picks_up_what_another_process_wrote() {
-    use tracker_core::{
-        crypto::keys::Dek,
-        store::Store,
-        tracker::Tracker,
-    };
+    use tracker_core::{crypto::keys::Dek, store::Store, tracker::Tracker};
 
     let dir = std::env::temp_dir().join(format!("snus-refresh-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
@@ -176,12 +263,23 @@ fn a_tracker_picks_up_what_another_process_wrote() {
     assert!(reader.state().active_products().is_empty());
 
     writer
-        .define_product("CUBA BLACK", "nicotine", "buccal_pouch", 16.0, None, None, None)
+        .define_product(
+            "CUBA BLACK",
+            "nicotine",
+            "buccal_pouch",
+            16.0,
+            None,
+            None,
+            None,
+        )
         .unwrap();
 
     // Without a refresh the second view is stale, which is the bug this guards.
     assert!(reader.state().active_products().is_empty());
-    assert!(reader.refresh().unwrap(), "a write elsewhere must be noticed");
+    assert!(
+        reader.refresh().unwrap(),
+        "a write elsewhere must be noticed"
+    );
     assert_eq!(reader.state().active_products().len(), 1);
 
     // And a refresh with nothing new must not claim a change: the tray redraws on it.

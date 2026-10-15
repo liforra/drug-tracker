@@ -38,15 +38,38 @@ pub enum AuditError {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum AuditEvent {
-    DeviceEnrolled { device_id: String, display_name: String, fingerprint: String },
-    DeviceRevoked { device_id: String, by_device: String },
-    InviteCreated { by_device: Option<String> },
-    LeaseAcquired { device_id: String },
-    LeaseRotated { device_id: String },
-    EpochPublished { epoch: i64, by_device: String, sealed_to: usize },
+    DeviceEnrolled {
+        device_id: String,
+        display_name: String,
+        fingerprint: String,
+    },
+    DeviceRevoked {
+        device_id: String,
+        by_device: String,
+    },
+    InviteCreated {
+        by_device: Option<String>,
+    },
+    LeaseAcquired {
+        device_id: String,
+    },
+    LeaseRotated {
+        device_id: String,
+    },
+    EpochPublished {
+        epoch: i64,
+        by_device: String,
+        sealed_to: usize,
+    },
     /// Ein Gerät hat einem anderen Zugang zu älteren Epochen gegeben.
-    WrapsBackfilled { by_device: String, added: usize },
-    AuthenticationFailed { device_id: String, reason: String },
+    WrapsBackfilled {
+        by_device: String,
+        added: usize,
+    },
+    AuthenticationFailed {
+        device_id: String,
+        reason: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,9 +104,11 @@ pub fn set_audit_key(conn: &Connection, account_id: &str, audit_pub: &[u8]) -> R
 
 pub fn audit_key(conn: &Connection, account_id: &str) -> Result<Option<Vec<u8>>> {
     Ok(conn
-        .query_row("SELECT audit_pub FROM accounts WHERE id = ?1", params![account_id], |row| {
-            row.get::<_, Option<Vec<u8>>>(0)
-        })
+        .query_row(
+            "SELECT audit_pub FROM accounts WHERE id = ?1",
+            params![account_id],
+            |row| row.get::<_, Option<Vec<u8>>>(0),
+        )
         .optional()?
         .flatten())
 }
@@ -135,7 +160,10 @@ pub fn entries_since(
          WHERE account_id = ?1 AND seq > ?2 ORDER BY seq ASC LIMIT ?3",
     )?;
     let rows = stmt.query_map(params![account_id, after_seq, limit], |row| {
-        Ok(SealedEntry { seq: row.get(0)?, sealed_entry: row.get(1)? })
+        Ok(SealedEntry {
+            seq: row.get(0)?,
+            sealed_entry: row.get(1)?,
+        })
     })?;
     Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
 }
@@ -148,7 +176,11 @@ mod tests {
 
     fn setup() -> (Connection, StaticSecret) {
         let conn = open_in_memory().unwrap();
-        conn.execute("INSERT INTO accounts (id, created_at) VALUES ('acct', 0)", []).unwrap();
+        conn.execute(
+            "INSERT INTO accounts (id, created_at) VALUES ('acct', 0)",
+            [],
+        )
+        .unwrap();
         let (secret, public) = crypto::generate_static_keypair().unwrap();
         set_audit_key(&conn, "acct", public.as_bytes()).unwrap();
         (conn, secret)
@@ -160,7 +192,10 @@ mod tests {
         record(
             &conn,
             "acct",
-            AuditEvent::DeviceRevoked { device_id: "phone".into(), by_device: "laptop".into() },
+            AuditEvent::DeviceRevoked {
+                device_id: "phone".into(),
+                by_device: "laptop".into(),
+            },
         )
         .unwrap();
 
@@ -178,7 +213,10 @@ mod tests {
         let entry: AuditEntry = serde_json::from_slice(&opened).unwrap();
         assert_eq!(
             entry.event,
-            AuditEvent::DeviceRevoked { device_id: "phone".into(), by_device: "laptop".into() }
+            AuditEvent::DeviceRevoked {
+                device_id: "phone".into(),
+                by_device: "laptop".into()
+            }
         );
     }
 
@@ -187,7 +225,10 @@ mod tests {
         let (conn, _) = setup();
         let (_, other) = crypto::generate_static_keypair().unwrap();
         assert!(
-            matches!(set_audit_key(&conn, "acct", other.as_bytes()), Err(AuditError::KeyAlreadySet)),
+            matches!(
+                set_audit_key(&conn, "acct", other.as_bytes()),
+                Err(AuditError::KeyAlreadySet)
+            ),
             "a later device must not be able to redirect the log to itself"
         );
     }
@@ -195,14 +236,26 @@ mod tests {
     #[test]
     fn entries_without_a_key_are_dropped_rather_than_failing_the_operation() {
         let conn = open_in_memory().unwrap();
-        conn.execute("INSERT INTO accounts (id, created_at) VALUES ('fresh', 0)", []).unwrap();
+        conn.execute(
+            "INSERT INTO accounts (id, created_at) VALUES ('fresh', 0)",
+            [],
+        )
+        .unwrap();
 
         assert!(matches!(
-            record(&conn, "fresh", AuditEvent::InviteCreated { by_device: None }),
+            record(
+                &conn,
+                "fresh",
+                AuditEvent::InviteCreated { by_device: None }
+            ),
             Err(AuditError::NoAuditKey)
         ));
         // The best-effort wrapper must not panic or propagate.
-        record_best_effort(&conn, "fresh", AuditEvent::InviteCreated { by_device: None });
+        record_best_effort(
+            &conn,
+            "fresh",
+            AuditEvent::InviteCreated { by_device: None },
+        );
         assert!(entries_since(&conn, "fresh", 0, 10).unwrap().is_empty());
     }
 
@@ -210,8 +263,14 @@ mod tests {
     fn the_log_is_ordered_and_pageable() {
         let (conn, secret) = setup();
         for i in 0..5 {
-            record(&conn, "acct", AuditEvent::LeaseAcquired { device_id: format!("dev{i}") })
-                .unwrap();
+            record(
+                &conn,
+                "acct",
+                AuditEvent::LeaseAcquired {
+                    device_id: format!("dev{i}"),
+                },
+            )
+            .unwrap();
         }
         let all = entries_since(&conn, "acct", 0, 100).unwrap();
         assert_eq!(all.len(), 5);
@@ -221,6 +280,11 @@ mod tests {
 
         let opened = crypto::open_anonymous(&secret, &tail[0].sealed_entry).unwrap();
         let entry: AuditEntry = serde_json::from_slice(&opened).unwrap();
-        assert_eq!(entry.event, AuditEvent::LeaseAcquired { device_id: "dev3".into() });
+        assert_eq!(
+            entry.event,
+            AuditEvent::LeaseAcquired {
+                device_id: "dev3".into()
+            }
+        );
     }
 }

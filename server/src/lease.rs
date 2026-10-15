@@ -100,7 +100,11 @@ pub fn acquire(conn: &Connection, device_id: &str) -> Result<Lease> {
         params![expires_at, device_id],
     )?;
 
-    Ok(Lease { key_share: share, key_share_pending: pending, expires_at })
+    Ok(Lease {
+        key_share: share,
+        key_share_pending: pending,
+        expires_at,
+    })
 }
 
 /// Phase one of rotation: mint a replacement share and keep the old one valid. The
@@ -130,7 +134,11 @@ pub fn rotate(conn: &Connection, device_id: &str) -> Result<Lease> {
         params![fresh, expires_at, device_id],
     )?;
 
-    Ok(Lease { key_share: current, key_share_pending: Some(fresh), expires_at })
+    Ok(Lease {
+        key_share: current,
+        key_share_pending: Some(fresh),
+        expires_at,
+    })
 }
 
 /// Phase two: the client confirms its on-disk wrapper now uses the pending share.
@@ -174,7 +182,11 @@ mod tests {
 
     fn setup() -> (Connection, String) {
         let conn = open_in_memory().unwrap();
-        conn.execute("INSERT INTO accounts (id, created_at) VALUES ('acct', 0)", []).unwrap();
+        conn.execute(
+            "INSERT INTO accounts (id, created_at) VALUES ('acct', 0)",
+            [],
+        )
+        .unwrap();
         conn.execute(
             "INSERT INTO devices (id, account_id, display_name, ed25519_pub, x25519_pub, created_at)
              VALUES ('dev', 'acct', 'phone', x'00', x'00', 0)",
@@ -202,7 +214,10 @@ mod tests {
         let original = acquire(&conn, &dev).unwrap().key_share;
         let rotated = rotate(&conn, &dev).unwrap();
 
-        assert_eq!(rotated.key_share, original, "old share still usable pre-commit");
+        assert_eq!(
+            rotated.key_share, original,
+            "old share still usable pre-commit"
+        );
         let pending = rotated.key_share_pending.expect("a new share was minted");
         assert_ne!(pending, original);
 
@@ -220,9 +235,15 @@ mod tests {
         commit(&conn, &dev).unwrap();
 
         let after = acquire(&conn, &dev).unwrap();
-        assert_eq!(after.key_share, pending, "the new share is now the live one");
+        assert_eq!(
+            after.key_share, pending,
+            "the new share is now the live one"
+        );
         assert_ne!(after.key_share, original);
-        assert!(after.key_share_pending.is_none(), "a leaked old share is now worthless");
+        assert!(
+            after.key_share_pending.is_none(),
+            "a leaked old share is now worthless"
+        );
     }
 
     #[test]
@@ -235,9 +256,14 @@ mod tests {
         assert!(matches!(rotate(&conn, &dev), Err(LeaseError::Revoked)));
 
         let share: Option<Vec<u8>> = conn
-            .query_row("SELECT key_share FROM devices WHERE id = 'dev'", [], |r| r.get(0))
+            .query_row("SELECT key_share FROM devices WHERE id = 'dev'", [], |r| {
+                r.get(0)
+            })
             .unwrap();
-        assert!(share.is_none(), "the share must be gone from storage, not just flagged");
+        assert!(
+            share.is_none(),
+            "the share must be gone from storage, not just flagged"
+        );
     }
 
     #[test]
@@ -245,11 +271,15 @@ mod tests {
         let (conn, dev) = setup();
         revoke(&conn, &dev).unwrap();
         let first: i64 = conn
-            .query_row("SELECT revoked_at FROM devices WHERE id = 'dev'", [], |r| r.get(0))
+            .query_row("SELECT revoked_at FROM devices WHERE id = 'dev'", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         revoke(&conn, &dev).unwrap();
         let second: i64 = conn
-            .query_row("SELECT revoked_at FROM devices WHERE id = 'dev'", [], |r| r.get(0))
+            .query_row("SELECT revoked_at FROM devices WHERE id = 'dev'", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(first, second);
     }
@@ -257,7 +287,13 @@ mod tests {
     #[test]
     fn unknown_devices_are_rejected_rather_than_provisioned() {
         let (conn, _) = setup();
-        assert!(matches!(acquire(&conn, "ghost"), Err(LeaseError::UnknownDevice)));
-        assert!(matches!(revoke(&conn, "ghost"), Err(LeaseError::UnknownDevice)));
+        assert!(matches!(
+            acquire(&conn, "ghost"),
+            Err(LeaseError::UnknownDevice)
+        ));
+        assert!(matches!(
+            revoke(&conn, "ghost"),
+            Err(LeaseError::UnknownDevice)
+        ));
     }
 }

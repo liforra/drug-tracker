@@ -153,7 +153,9 @@ impl Tracker {
         if !self.state.products.contains_key(product_id) {
             return Err(TrackerError::UnknownProduct(product_id.to_string()));
         }
-        self.record(Event::ProductRetired { product_id: product_id.to_string() })?;
+        self.record(Event::ProductRetired {
+            product_id: product_id.to_string(),
+        })?;
         Ok(())
     }
 
@@ -188,7 +190,10 @@ impl Tracker {
         if !self.state.sessions.contains_key(session_id) {
             return Err(TrackerError::UnknownSession(session_id.to_string()));
         }
-        self.record(Event::SessionEnded { session_id: session_id.to_string(), ended_at })?;
+        self.record(Event::SessionEnded {
+            session_id: session_id.to_string(),
+            ended_at,
+        })?;
         Ok(())
     }
 
@@ -243,7 +248,10 @@ impl Tracker {
         {
             return Err(TrackerError::InvalidValue(format!("Faktor {factor}")));
         }
-        self.record(Event::SubjectUpdated { body_mass_kg, metabolism_factor })?;
+        self.record(Event::SubjectUpdated {
+            body_mass_kg,
+            metabolism_factor,
+        })?;
         Ok(())
     }
 
@@ -252,11 +260,7 @@ impl Tracker {
         self.pause_session_at(session_id, Utc::now())
     }
 
-    pub fn pause_session_at(
-        &mut self,
-        session_id: &str,
-        paused_at: DateTime<Utc>,
-    ) -> Result<()> {
+    pub fn pause_session_at(&mut self, session_id: &str, paused_at: DateTime<Utc>) -> Result<()> {
         let Some(session) = self.state.sessions.get(session_id) else {
             return Err(TrackerError::UnknownSession(session_id.to_string()));
         };
@@ -278,11 +282,7 @@ impl Tracker {
         self.resume_session_at(session_id, Utc::now())
     }
 
-    pub fn resume_session_at(
-        &mut self,
-        session_id: &str,
-        resumed_at: DateTime<Utc>,
-    ) -> Result<()> {
+    pub fn resume_session_at(&mut self, session_id: &str, resumed_at: DateTime<Utc>) -> Result<()> {
         let Some(session) = self.state.sessions.get(session_id) else {
             return Err(TrackerError::UnknownSession(session_id.to_string()));
         };
@@ -297,7 +297,9 @@ impl Tracker {
     }
 
     pub fn discard_session(&mut self, session_id: &str) -> Result<()> {
-        self.record(Event::SessionDiscarded { session_id: session_id.to_string() })?;
+        self.record(Event::SessionDiscarded {
+            session_id: session_id.to_string(),
+        })?;
         Ok(())
     }
 
@@ -337,7 +339,8 @@ impl Tracker {
                 let ciphertext = BASE64_STANDARD
                     .decode(&event.ciphertext)
                     .map_err(|e| SyncError::Transport(e.to_string()))?;
-                self.store.ingest(&event.event_id, event.epoch, &nonce, &ciphertext, event.seq)?;
+                self.store
+                    .ingest(&event.event_id, event.epoch, &nonce, &ciphertext, event.seq)?;
             }
             report.pulled += page.events.len();
             self.store.set_cursor(page.cursor)?;
@@ -384,7 +387,8 @@ impl Tracker {
     }
 
     pub fn persist_deks(&self, device_secret: &[u8], lease_share: &[u8]) -> Result<()> {
-        self.store.save_deks(&self.deks, device_secret, lease_share)?;
+        self.store
+            .save_deks(&self.deks, device_secret, lease_share)?;
         Ok(())
     }
 

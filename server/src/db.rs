@@ -256,7 +256,11 @@ mod tests {
     use super::*;
 
     fn seed(conn: &Connection) {
-        conn.execute("INSERT INTO accounts (id, created_at) VALUES ('acct', 0)", []).unwrap();
+        conn.execute(
+            "INSERT INTO accounts (id, created_at) VALUES ('acct', 0)",
+            [],
+        )
+        .unwrap();
     }
 
     #[test]
@@ -284,7 +288,11 @@ mod tests {
     fn accounts_do_not_see_each_others_records() {
         let conn = open_in_memory().unwrap();
         seed(&conn);
-        conn.execute("INSERT INTO accounts (id, created_at) VALUES ('other', 0)", []).unwrap();
+        conn.execute(
+            "INSERT INTO accounts (id, created_at) VALUES ('other', 0)",
+            [],
+        )
+        .unwrap();
         append_event(&conn, "acct", "ev1", 1, b"n", b"a").unwrap();
         append_event(&conn, "other", "ev2", 1, b"n", b"b").unwrap();
         let mine = events_since(&conn, "acct", 0, 100).unwrap();

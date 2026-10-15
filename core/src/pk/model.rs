@@ -138,7 +138,10 @@ pub struct Subject {
 
 impl Default for Subject {
     fn default() -> Self {
-        Self { body_mass_kg: 75.0, metabolism_factor: 1.0 }
+        Self {
+            body_mass_kg: 75.0,
+            metabolism_factor: 1.0,
+        }
     }
 }
 

@@ -95,7 +95,11 @@ pub struct PullPage {
 
 impl SyncClient {
     pub fn new(config: ServerConfig) -> Self {
-        Self { config, token: Mutex::new(None), credentials: Mutex::new(None) }
+        Self {
+            config,
+            token: Mutex::new(None),
+            credentials: Mutex::new(None),
+        }
     }
 
     pub fn is_authenticated(&self) -> bool {
@@ -129,8 +133,7 @@ impl SyncClient {
             .read_to_end(&mut bytes)
             .map_err(|e| SyncError::Transport(e.to_string()))?;
 
-        let plaintext =
-            crypto::primitives::open_response_envelope(&sealed.reply_key, &bytes)?;
+        let plaintext = crypto::primitives::open_response_envelope(&sealed.reply_key, &bytes)?;
         let decoded: Value = serde_json::from_slice(&plaintext)?;
 
         let status = decoded["status"].as_u64().unwrap_or(0) as u16;
@@ -173,7 +176,11 @@ impl SyncClient {
         }
         // The server flags revocation explicitly so it is never confused with a
         // transient failure that a client would sensibly retry.
-        if parsed.get("revoked").and_then(Value::as_bool).unwrap_or(false) {
+        if parsed
+            .get("revoked")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        {
             return Err(SyncError::Revoked);
         }
         Err(SyncError::Server {
@@ -193,18 +200,28 @@ impl SyncClient {
     }
 
     fn perform_handshake(&self, device_id: &str, signing_key: &SigningKey) -> Result<()> {
-        let challenge =
-            self.call_once("POST", "/v1/auth/challenge", Some(json!({ "device_id": device_id })))?;
-        let nonce = challenge["nonce"].as_str().ok_or(SyncError::NotAuthenticated)?;
-        let signature = BASE64_URL_SAFE_NO_PAD.encode(signing_key.sign(nonce.as_bytes()).to_bytes());
+        let challenge = self.call_once(
+            "POST",
+            "/v1/auth/challenge",
+            Some(json!({ "device_id": device_id })),
+        )?;
+        let nonce = challenge["nonce"]
+            .as_str()
+            .ok_or(SyncError::NotAuthenticated)?;
+        let signature =
+            BASE64_URL_SAFE_NO_PAD.encode(signing_key.sign(nonce.as_bytes()).to_bytes());
 
         let verified = self.call_once(
             "POST",
             "/v1/auth/verify",
             Some(json!({ "nonce": nonce, "signature": signature })),
         )?;
-        *self.token.lock().unwrap() =
-            Some(verified["token"].as_str().ok_or(SyncError::NotAuthenticated)?.to_string());
+        *self.token.lock().unwrap() = Some(
+            verified["token"]
+                .as_str()
+                .ok_or(SyncError::NotAuthenticated)?
+                .to_string(),
+        );
         Ok(())
     }
 
@@ -241,21 +258,32 @@ impl SyncClient {
     }
 
     pub fn lease_acquire(&self) -> Result<Lease> {
-        Ok(serde_json::from_value(self.call("POST", "/v1/lease/acquire", Some(json!({})))?)?)
+        Ok(serde_json::from_value(self.call(
+            "POST",
+            "/v1/lease/acquire",
+            Some(json!({})),
+        )?)?)
     }
 
     pub fn lease_rotate(&self) -> Result<Lease> {
-        Ok(serde_json::from_value(self.call("POST", "/v1/lease/rotate", Some(json!({})))?)?)
+        Ok(serde_json::from_value(self.call(
+            "POST",
+            "/v1/lease/rotate",
+            Some(json!({})),
+        )?)?)
     }
 
     pub fn lease_commit(&self) -> Result<()> {
-        self.call("POST", "/v1/lease/commit", Some(json!({}))).map(|_| ())
+        self.call("POST", "/v1/lease/commit", Some(json!({})))
+            .map(|_| ())
     }
 
     pub fn deks(&self, since_epoch: i64) -> Result<Vec<DekWrap>> {
-        Ok(serde_json::from_value(
-            self.call("GET", &format!("/v1/deks?since_epoch={since_epoch}"), None)?,
-        )?)
+        Ok(serde_json::from_value(self.call(
+            "GET",
+            &format!("/v1/deks?since_epoch={since_epoch}"),
+            None,
+        )?)?)
     }
 
     pub fn current_epoch(&self) -> Result<Option<i64>> {
@@ -269,7 +297,11 @@ impl SyncClient {
                 json!({ "device_id": device_id, "wrapped_dek": BASE64_STANDARD.encode(wrapped) })
             })
             .collect();
-        self.call("POST", "/v1/deks", Some(json!({ "epoch": epoch, "wraps": wraps })))
+        self.call(
+            "POST",
+            "/v1/deks",
+            Some(json!({ "epoch": epoch, "wraps": wraps })),
+        )
     }
 
     /// Reicht Schlüssel für bereits bestehende Epochen nach.
@@ -300,9 +332,11 @@ impl SyncClient {
     }
 
     pub fn pull(&self, since: i64, limit: i64) -> Result<PullPage> {
-        Ok(serde_json::from_value(
-            self.call("GET", &format!("/v1/events?since={since}&limit={limit}"), None)?,
-        )?)
+        Ok(serde_json::from_value(self.call(
+            "GET",
+            &format!("/v1/events?since={since}&limit={limit}"),
+            None,
+        )?)?)
     }
 
     pub fn devices(&self) -> Result<Value> {
@@ -315,7 +349,11 @@ impl SyncClient {
 
     pub fn revoke(&self, device_id: &str, force: bool) -> Result<()> {
         let suffix = if force { "?force=true" } else { "" };
-        self.call("POST", &format!("/v1/devices/{device_id}/revoke{suffix}"), Some(json!({})))
-            .map(|_| ())
+        self.call(
+            "POST",
+            &format!("/v1/devices/{device_id}/revoke{suffix}"),
+            Some(json!({})),
+        )
+        .map(|_| ())
     }
 }

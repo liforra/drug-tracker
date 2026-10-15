@@ -33,19 +33,24 @@ const SPACE_MONO_BOLD: &[u8] = include_bytes!("../../assets/res/font/space_mono_
 
 pub fn install(ctx: &egui::Context) {
     let mut fonts = FontDefinitions::default();
-    fonts.font_data.insert("space-mono".into(), FontData::from_static(SPACE_MONO).into());
-    fonts
-        .font_data
-        .insert("space-mono-bold".into(), FontData::from_static(SPACE_MONO_BOLD).into());
+    fonts.font_data.insert(
+        "space-mono".into(),
+        FontData::from_static(SPACE_MONO).into(),
+    );
+    fonts.font_data.insert(
+        "space-mono-bold".into(),
+        FontData::from_static(SPACE_MONO_BOLD).into(),
+    );
     // One family for everything: the bar is monospace throughout, so is this.
     for family in [FontFamily::Proportional, FontFamily::Monospace] {
         let list = fonts.families.entry(family).or_default();
         list.insert(0, "space-mono".into());
     }
     // egui has no weight axis; a named family is how a bold face is selected.
-    fonts
-        .families
-        .insert(FontFamily::Name("bold".into()), vec!["space-mono-bold".into(), "space-mono".into()]);
+    fonts.families.insert(
+        FontFamily::Name("bold".into()),
+        vec!["space-mono-bold".into(), "space-mono".into()],
+    );
     ctx.set_fonts(fonts);
 
     let mut style = (*ctx.style()).clone();
