@@ -5,7 +5,10 @@
 //! devices, and read what the log adds up to. It mirrors the Android app screen for
 //! screen so the two cannot drift into being different products.
 
-use std::time::{Duration as StdDuration, Instant};
+use std::{
+    sync::{Arc, Mutex, mpsc},
+    time::{Duration as StdDuration, Instant},
+};
 
 use chrono::{DateTime, Duration, Utc};
 use eframe::egui::{
@@ -21,16 +24,92 @@ use crate::{
     tray::{format_duration, format_elapsed},
 };
 
-/// How often the window re-reads the log. Another process (the tray, `snus add` in a
-/// terminal, a sync from the phone) may have written to it, and without this the window
-/// keeps showing a private, stale opinion.
-const REFRESH: StdDuration = StdDuration::from_secs(3);
+/// How often the window checks the log for writes by other processes (the tray, `snus add`
+/// in a terminal, the background sync pulling the phone's changes). The check is one
+/// indexed lookup, so once a second costs nothing; without it the window shows a private,
+/// stale opinion.
+const REFRESH: StdDuration = StdDuration::from_secs(1);
+/// The curves move on their own even when nothing was logged, but slowly.
+const REBUILD: StdDuration = StdDuration::from_secs(10);
+/// How often the background thread syncs with the server. Pushes are also triggered the
+/// moment something is written, so this is mostly how quickly the phone's changes show up.
+const SYNC_EVERY: StdDuration = StdDuration::from_secs(10);
+
+/// What the background sync thread last learned. The window used to read `online` from the
+/// session opened at start-up and never update it, so it claimed "verbunden" (or "offline")
+/// for as long as it stayed open regardless of what the network was doing.
+#[derive(Clone, Default)]
+struct SyncStatus {
+    online: bool,
+    error: Option<String>,
+}
+
+struct SyncHandle {
+    status: Arc<Mutex<SyncStatus>>,
+    wake: mpsc::Sender<()>,
+}
+
+/// Syncs in the background so the window never freezes on the network.
+///
+/// It opens its own `Session`: the SQLite connection is not `Sync`, and the window's
+/// session stays on the UI thread. Both talk to the same database file; the window's
+/// `refresh()` picks up what this thread ingests.
+fn spawn_sync(ctx: egui::Context, initial_online: bool) -> SyncHandle {
+    let status = Arc::new(Mutex::new(SyncStatus {
+        online: initial_online,
+        error: None,
+    }));
+    let (wake, wake_rx) = mpsc::channel::<()>();
+
+    let shared = Arc::clone(&status);
+    std::thread::spawn(move || {
+        let mut session: Option<Session> = None;
+        loop {
+            if session.is_none() {
+                session = Session::open().ok();
+            }
+            let outcome = match session.as_mut() {
+                Some(s) => s.sync().map(|_| ()).map_err(|e| e.to_string()),
+                None => Err("Server nicht erreichbar".to_string()),
+            };
+            if outcome.is_err() {
+                // Reopen next time: the lease or the connection may be what failed.
+                session = None;
+            }
+            if let Ok(mut status) = shared.lock() {
+                *status = match outcome {
+                    Ok(()) => SyncStatus {
+                        online: true,
+                        error: None,
+                    },
+                    Err(error) => SyncStatus {
+                        online: false,
+                        error: Some(error),
+                    },
+                };
+            }
+            ctx.request_repaint();
+
+            // Woken early by a write, otherwise on the timer. A closed channel means the
+            // window is gone.
+            match wake_rx.recv_timeout(SYNC_EVERY) {
+                Err(mpsc::RecvTimeoutError::Disconnected) => return,
+                _ => while wake_rx.try_recv().is_ok() {},
+            }
+        }
+    });
+
+    SyncHandle { status, wake }
+}
 
 pub struct StatsApp {
     session: Option<Session>,
     error: Option<String>,
     levels: Option<Levels>,
     last_refresh: Instant,
+    last_rebuild: Instant,
+    sync: Option<SyncHandle>,
+    ctx: egui::Context,
     notice: Notice,
 
     new_name: String,
@@ -100,6 +179,7 @@ struct ProductView {
 /// frame actually needs is cheaper than threading lifetimes through the UI.
 struct View {
     online: bool,
+    sync_error: Option<String>,
     pending: i64,
     open: Option<OpenView>,
     nicotine: f64,
@@ -119,9 +199,11 @@ impl StatsApp {
         let curves = self.levels.as_ref()?;
         let state = session.tracker.state();
         let now = Utc::now();
+        let sync = self.sync_status();
 
         Some(View {
-            online: session.online,
+            online: sync.online,
+            sync_error: sync.error,
             pending: session.tracker.store().pending_count().unwrap_or(0),
             open: state.open_sessions().first().map(|s| OpenView {
                 session_id: s.id.clone(),
@@ -162,6 +244,9 @@ impl StatsApp {
             error: None,
             levels: None,
             last_refresh: Instant::now(),
+            last_rebuild: Instant::now(),
+            sync: None,
+            ctx: cc.egui_ctx.clone(),
             notice: Notice::default(),
             new_name: String::new(),
             new_mg: String::new(),
@@ -182,6 +267,9 @@ impl StatsApp {
         match Session::open() {
             Ok(session) => {
                 self.levels = Some(levels::build(session.tracker.state()));
+                if self.sync.is_none() {
+                    self.sync = Some(spawn_sync(self.ctx.clone(), session.online));
+                }
                 self.session = Some(session);
                 self.error = None;
             }
@@ -193,23 +281,41 @@ impl StatsApp {
         if let Some(session) = &self.session {
             self.levels = Some(levels::build(session.tracker.state()));
         }
-        self.last_refresh = Instant::now();
+        self.last_rebuild = Instant::now();
     }
 
-    /// Pick up writes made by other processes.
+    /// Pick up writes made by other processes, and by the background sync.
     fn reload(&mut self) {
-        if let Some(session) = self.session.as_mut() {
-            let _ = session.tracker.refresh();
+        self.last_refresh = Instant::now();
+        let changed = self
+            .session
+            .as_mut()
+            .is_some_and(|s| s.tracker.refresh().unwrap_or(false));
+        if changed || self.last_rebuild.elapsed() >= REBUILD {
+            self.rebuild();
         }
-        // Rebuilt even when nothing changed: the curves move on their own.
-        self.rebuild();
     }
 
-    /// Run a change against the tracker, push it to the server and show the outcome.
+    /// Ask the background thread to sync now rather than at its next tick.
+    fn poke_sync(&self) {
+        if let Some(sync) = &self.sync {
+            let _ = sync.wake.send(());
+        }
+    }
+
+    fn sync_status(&self) -> SyncStatus {
+        self.sync
+            .as_ref()
+            .and_then(|s| s.status.lock().ok().map(|s| s.clone()))
+            .unwrap_or_default()
+    }
+
+    /// Run a change against the tracker and hand it to the background sync.
     ///
-    /// Pushing straight away is what makes a variety added here appear on the phone
-    /// without waiting for the next scheduled sync. A failed push is reported but is not
-    /// an error: the record is safely in the local log and goes out with the next sync.
+    /// Waking the sync thread is what makes a variety added here appear on the phone
+    /// within a moment rather than at the next tick, without blocking the window on the
+    /// network. A failed push is not an error: the record is safely in the local log and
+    /// goes out with the next sync, and the header says while it is still waiting.
     fn act(&mut self, change: impl FnOnce(&mut Session) -> Result<String, String>) {
         let Some(session) = self.session.as_mut() else {
             self.notice = Notice {
@@ -220,14 +326,11 @@ impl StatsApp {
         };
         match change(session) {
             Ok(message) => {
-                let message = match session.sync() {
-                    Ok(_) => message,
-                    Err(e) => format!("{message} (Sync fehlgeschlagen: {e})"),
-                };
                 self.notice = Notice {
                     text: message,
                     is_error: false,
                 };
+                self.poke_sync();
             }
             Err(message) => {
                 self.notice = Notice {
@@ -245,17 +348,9 @@ impl eframe::App for StatsApp {
         if self.last_refresh.elapsed() >= REFRESH {
             self.reload();
         }
-        // The session clock ticks every second while something is in; otherwise the
-        // refresh interval is all the redraws needed.
-        let ticking = self
-            .session
-            .as_ref()
-            .is_some_and(|s| !s.tracker.state().open_sessions().is_empty());
-        ctx.request_repaint_after(if ticking {
-            StdDuration::from_secs(1)
-        } else {
-            REFRESH
-        });
+        // Redrawn every refresh tick: that is when the log is checked, and it also keeps
+        // the session clock moving.
+        ctx.request_repaint_after(REFRESH);
 
         egui::CentralPanel::default()
             .frame(
@@ -437,18 +532,11 @@ impl StatsApp {
             );
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 if ui
-                    .add_enabled(
-                        view.online,
-                        egui::Button::new(RichText::new("Sync").size(12.0)),
-                    )
-                    .on_hover_text("Jetzt mit dem Server abgleichen")
+                    .add(egui::Button::new(RichText::new("Sync").size(12.0)))
+                    .on_hover_text("Jetzt mit dem Server abgleichen (läuft sonst alle 10 s)")
                     .clicked()
                 {
-                    self.act(|session| match session.sync() {
-                        Ok(r) if r.pushed == 0 && r.pulled == 0 => Ok("Alles aktuell".into()),
-                        Ok(r) => Ok(format!("{} hoch, {} runter", r.pushed, r.pulled)),
-                        Err(e) => Err(format!("Sync fehlgeschlagen: {e}")),
-                    });
+                    self.poke_sync();
                 }
                 let settings_label = if self.show_settings {
                     "Einstellungen [-]"
@@ -466,7 +554,10 @@ impl StatsApp {
                 } else {
                     ("offline", TEXT_DIM)
                 };
-                ui.label(RichText::new(label).size(12.0).color(colour));
+                let status = ui.label(RichText::new(label).size(12.0).color(colour));
+                if let Some(error) = &view.sync_error {
+                    status.on_hover_text(format!("Letzter Sync: {error}"));
+                }
                 dot(ui, colour);
                 if view.pending > 0 {
                     ui.label(

@@ -106,11 +106,16 @@ fn snapshot(session: &Session, status: String) -> Snapshot {
     }
 }
 
-/// How often to push pending records and take a fresh lease.
+/// How often to push pending records and pull the phone's changes.
 ///
-/// Hourly renewal against a 24 hour TTL means the device is almost always sitting on a
-/// nearly full window, so losing the network for an afternoon is invisible.
-const SYNC_INTERVAL: Duration = Duration::from_secs(3600);
+/// This used to be hourly, which left everything logged from the tray unsynced for up to
+/// an hour and made the phone look like it was ignoring the laptop. A sync with nothing to
+/// move is a single request, so a short interval costs next to nothing.
+const SYNC_INTERVAL: Duration = Duration::from_secs(15);
+/// How often to take a fresh lease. Hourly renewal against a 24 hour TTL means the device
+/// is almost always sitting on a nearly full window, so losing the network for an
+/// afternoon is invisible.
+const LEASE_INTERVAL: Duration = Duration::from_secs(3600);
 /// How long to block waiting for a command before doing the periodic work.
 ///
 /// Short, because this is also how quickly the tray notices a change made somewhere
@@ -142,6 +147,7 @@ pub fn spawn(updates: tokio::sync::mpsc::UnboundedSender<Snapshot>) -> mpsc::Sen
 
         let _ = updates.send(snapshot(&session, String::new()));
         let mut last_sync = std::time::Instant::now();
+        let mut last_lease = std::time::Instant::now();
         // Which session we have already announced as spent. Per process, so a restart
         // may repeat one notification -- the alternative is persisting UI state into
         // the log, and the log is for what happened to you, not for what the tray has
@@ -151,6 +157,14 @@ pub fn spawn(updates: tokio::sync::mpsc::UnboundedSender<Snapshot>) -> mpsc::Sen
         loop {
             let command = rx.recv_timeout(POLL);
             let mut status = String::new();
+            // A write made here goes out straight away instead of waiting for the timer.
+            let wrote = matches!(
+                command,
+                Ok(Command::StartSession(_)
+                    | Command::EndSession(_)
+                    | Command::PauseSession(_)
+                    | Command::ResumeSession(_))
+            );
 
             match command {
                 Ok(Command::StartSession(product_id)) => {
@@ -213,9 +227,16 @@ pub fn spawn(updates: tokio::sync::mpsc::UnboundedSender<Snapshot>) -> mpsc::Sen
                 status = format!("Konnte lokale Daten nicht neu lesen: {e}");
             }
 
-            if last_sync.elapsed() >= SYNC_INTERVAL {
+            if last_lease.elapsed() >= LEASE_INTERVAL {
                 let _ = session.renew_lease();
-                status = report_sync(&mut session);
+                last_lease = std::time::Instant::now();
+            }
+            if wrote || last_sync.elapsed() >= SYNC_INTERVAL {
+                // Keep an error from the command itself: it is the more useful message.
+                let synced = report_sync(&mut session);
+                if status.is_empty() {
+                    status = synced;
+                }
                 last_sync = std::time::Instant::now();
             }
 
@@ -256,7 +277,11 @@ fn announce_if_spent(snapshot: &Snapshot, announced: &mut Option<String>) {
 }
 
 fn report_sync(session: &mut Session) -> String {
-    match session.sync() {
+    // The online flag was fixed when the session opened, so the tray kept saying
+    // "Offline" after the network came back (and the reverse). Follow the real outcome.
+    let result = session.sync();
+    session.online = result.is_ok();
+    match result {
         Ok(report) if report.pushed == 0 && report.pulled == 0 => String::new(),
         Ok(report) => format!("Sync: {} hoch, {} runter", report.pushed, report.pulled),
         Err(SessionError::Revoked) => "Gerät wurde gesperrt — lokale Daten gelöscht".into(),
